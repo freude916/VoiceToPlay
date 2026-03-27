@@ -1,3 +1,5 @@
+using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.Rooms;
 using VoiceToPlay.Voice.Core;
 
 namespace VoiceToPlay.Commands.Turn;
@@ -13,10 +15,14 @@ public sealed class EndTurnCommand : IVoiceCommand
 
     public void Execute(string word)
     {
-        // TODO: 实现结束回合逻辑
-        // var state = CombatManager.Instance.DebugOnlyGetState();
-        // var me = LocalContext.GetMe(state);
-        // CombatManager.Instance.SetReadyToEndTurn(me, true);
+        var endTurnButton = NCombatRoom.Instance?.Ui?.EndTurnButton;
+        if (endTurnButton == null)
+        {
+            MainFile.Logger.Warn($"EndTurnCommand: {word} - EndTurnButton not found");
+            return;
+        }
+
+        endTurnButton.ForceClick();
         MainFile.Logger.Info($"EndTurnCommand: {word}");
     }
 

@@ -7,6 +7,7 @@ using VoiceToPlay.Commands.Event;
 using VoiceToPlay.Commands.MainMenu;
 using VoiceToPlay.Commands.Map;
 using VoiceToPlay.Commands.Proceed;
+using VoiceToPlay.Commands.RestSite;
 using VoiceToPlay.Commands.Rewards;
 using VoiceToPlay.Commands.Treasure;
 using VoiceToPlay.Commands.Turn;
@@ -48,6 +49,7 @@ internal sealed partial class VoiceEntryNode : Node
         _commandEngine.Register(new CardGridSelectCommand());
         _commandEngine.Register(new EventCommand());
         _commandEngine.Register(new TreasureCommand());
+        _commandEngine.Register(new RestSiteCommand());
 
         // 3. 创建识别服务
         _recognitionService = new VoiceRecognitionService(this, _commandEngine);

@@ -90,7 +90,16 @@ public sealed class TreasureCommand : IVoiceCommand
     {
         _normalizedToRaw.Clear();
 
-        var currentScreen = ActiveScreenContext.Instance?.GetCurrentScreen();
+        // GetCurrentScreen() 可能在场景切换时抛异常
+        IScreenContext? currentScreen;
+        try
+        {
+            currentScreen = ActiveScreenContext.Instance?.GetCurrentScreen();
+        }
+        catch
+        {
+            return [];  // 场景切换中，安全返回空
+        }
         if (currentScreen is not NTreasureRoom treasureRoom) return [];
 
         var holders = GetEnabledHolders();
@@ -275,6 +284,9 @@ public sealed class TreasureCommand : IVoiceCommand
             MainFile.Logger.Warn($"TreasureCommand: holder invalid at index={index + 1}");
             return;
         }
+
+        // 选择遗物后立即清理 HoverTip
+        NHoverTipSet.Remove(holder);
 
         holder.ForceClick();
         MainFile.Logger.Info($"TreasureCommand: claim current index={index + 1}");

@@ -35,10 +35,24 @@ public sealed class CardRowSelectCommand : IVoiceCommand
         {
             _wordToTarget.Clear();
 
-            var screen = NOverlayStack.Instance?.Peek() as NCardRewardSelectionScreen;
-            if (screen == null) return [];
+            // 支持 NCardRewardSelectionScreen 和 NChooseACardSelectionScreen
+            var screen = NOverlayStack.Instance?.Peek();
+            Control? cardRow = null;
+            Control? alternativesContainer = null;
+            NButton? skipButton = null;
 
-            var cardRow = screen.GetNodeOrNull<Control>("UI/CardRow");
+            if (screen is NCardRewardSelectionScreen rewardScreen)
+            {
+                cardRow = rewardScreen.GetNodeOrNull<Control>("UI/CardRow");
+                alternativesContainer = rewardScreen.GetNodeOrNull<Control>("UI/RewardAlternatives");
+            }
+            else if (screen is NChooseACardSelectionScreen chooseScreen)
+            {
+                cardRow = chooseScreen.GetNodeOrNull<Control>("CardRow");
+                // NChooseACardSelectionScreen 的跳过按钮
+                skipButton = chooseScreen.GetNodeOrNull<NButton>("SkipButton");
+            }
+
             if (cardRow == null) return [];
 
             var index = 0;
@@ -86,8 +100,7 @@ public sealed class CardRowSelectCommand : IVoiceCommand
                 }
             }
 
-            // 备选按钮（默认有跳过，献祭卡牌等由遗物或其他来源添加）
-            var alternativesContainer = screen.GetNodeOrNull<Control>("UI/RewardAlternatives");
+            // 备选按钮（默认有跳过，献祭卡牌等由遗物或其他来源添加，仅 NCardRewardSelectionScreen）
             if (alternativesContainer != null)
             {
                 foreach (var child in alternativesContainer.GetChildren())
@@ -100,6 +113,12 @@ public sealed class CardRowSelectCommand : IVoiceCommand
                     if (!string.IsNullOrEmpty(normalizedText))
                         _wordToTarget[normalizedText] = button;
                 }
+            }
+
+            // NChooseACardSelectionScreen 的跳过按钮
+            if (skipButton != null && skipButton.IsEnabled)
+            {
+                _wordToTarget["跳过"] = skipButton;
             }
 
             return _wordToTarget.Keys;

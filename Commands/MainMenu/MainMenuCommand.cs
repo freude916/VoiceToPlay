@@ -31,13 +31,9 @@ public sealed class MainMenuCommand : IVoiceCommand
         {
             _wordToButton.Clear();
             var mainMenu = NGame.Instance?.MainMenu;
-            if (mainMenu == null)
-            {
-                MainFile.Logger.Warn("MainMenuCommand: MainMenu is null");
-                return [];
-            }
+            if (mainMenu == null) return [];  // 不在主菜单，静默返回空
 
-            var count = 0;
+            var buttonInfos = new List<string>();
             foreach (var button in mainMenu.MainMenuButtons)
             {
                 if (button == null || !button.IsEnabled || !button.IsVisibleInTree())
@@ -50,12 +46,12 @@ public sealed class MainMenuCommand : IVoiceCommand
                 if (!string.IsNullOrEmpty(normalized))
                 {
                     _wordToButton[normalized] = button;
-                    count++;
-                    MainFile.Logger.Info($"MainMenuCommand: word='{normalized}' button={button.Name}");
+                    buttonInfos.Add($"'{normalized}'->{button.Name}");
                 }
             }
 
-            MainFile.Logger.Info($"MainMenuCommand: total {count} words");
+            if (buttonInfos.Count > 0)
+                MainFile.Logger.Info($"MainMenuCommand: buttons=[{string.Join(", ", buttonInfos)}]");
             return _wordToButton.Keys;
         }
     }

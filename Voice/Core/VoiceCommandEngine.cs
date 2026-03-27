@@ -66,11 +66,24 @@ public sealed class VoiceCommandEngine
     {
         _wordToCommands.Clear();
         foreach (var cmd in _commands)
-        foreach (var word in cmd.SupportedWords)
         {
-            if (!_wordToCommands.TryGetValue(word, out var list))
-                _wordToCommands[word] = list = [];
-            list.Add(cmd);
+            IEnumerable<string> words;
+            try
+            {
+                words = cmd.SupportedWords;
+            }
+            catch (Exception e)
+            {
+                MainFile.Logger.Warn($"VoiceCommandEngine: {cmd.GetType().Name}.SupportedWords threw: {e.Message}");
+                continue;
+            }
+
+            foreach (var word in words)
+            {
+                if (!_wordToCommands.TryGetValue(word, out var list))
+                    _wordToCommands[word] = list = [];
+                list.Add(cmd);
+            }
         }
     }
 

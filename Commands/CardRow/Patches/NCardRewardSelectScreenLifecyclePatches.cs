@@ -25,3 +25,26 @@ internal static class NCardRewardSelectionScreenClosedPatch
         CardRowSelectCommand.ClearVocabulary();
     }
 }
+
+/// <summary>
+///     NChooseACardSelectionScreen 生命周期补丁：管理选牌词表（药水临时牌等）
+/// </summary>
+[HarmonyPatch(typeof(NChooseACardSelectionScreen), "AfterOverlayShown")]
+internal static class NChooseACardSelectionScreenShownPatch
+{
+    private static void Postfix(NChooseACardSelectionScreen __instance)
+    {
+        MainFile.Logger.Info("NChooseACardSelectionScreen.AfterOverlayShown, refreshing vocabulary");
+        CardRowSelectCommand.RefreshVocabulary();
+    }
+}
+
+[HarmonyPatch(typeof(NChooseACardSelectionScreen), "AfterOverlayClosed")]
+internal static class NChooseACardSelectionScreenClosedPatch
+{
+    private static void Postfix()
+    {
+        MainFile.Logger.Info("NChooseACardSelectionScreen.AfterOverlayClosed, clearing vocabulary");
+        CardRowSelectCommand.ClearVocabulary();
+    }
+}

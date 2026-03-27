@@ -46,7 +46,7 @@ internal sealed class JiebaTokenizer
         try
         {
             var result = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var token in segmenter.Cut(text, false))
+            foreach (var token in segmenter.Cut(text, false, false))
             {
                 var normalized = VoiceText.Normalize(token);
                 if (normalized.Length > 0)

@@ -1,7 +1,6 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes;
-using MegaCrit.Sts2.Core.Nodes.HoverTips;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 
@@ -31,29 +30,15 @@ internal static class NTreasureRoomRelicCollectionInitPatch
 }
 
 /// <summary>
-///     宝箱房间退出时清除词表和 HoverTip
+///     宝箱房间退出时清除词表
+///     注：HoverTip 由 NHoverTipSet 自动通过 TreeExiting 信号清理
 /// </summary>
 [HarmonyPatch(typeof(NTreasureRoom), "_ExitTree")]
 internal static class NTreasureRoomExitPatch
 {
-    private static void Prefix(NTreasureRoom __instance)
+    private static void Postfix()
     {
-        MainFile.Logger.Info("NTreasureRoom._ExitTree, clearing vocabulary and hovertips");
-        
-        // 清理所有遗物 holder 的 hovertips
-        var stack = new Stack<Node>();
-        stack.Push(__instance);
-        while (stack.Count > 0)
-        {
-            var node = stack.Pop();
-            if (node is NTreasureRoomRelicHolder holder)
-                NHoverTipSet.Remove(holder);
-            
-            foreach (var child in node.GetChildren())
-                if (child is Node childNode)
-                    stack.Push(childNode);
-        }
-        
+        MainFile.Logger.Info("NTreasureRoom._ExitTree, clearing vocabulary");
         TreasureCommand.RefreshVocabulary();
     }
 }

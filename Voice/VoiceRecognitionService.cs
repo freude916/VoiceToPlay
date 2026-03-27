@@ -308,7 +308,6 @@ internal sealed class VoiceRecognitionService : IDisposable
 
     private void OnVocabularyUpdated(IReadOnlySet<string> words)
     {
-        MainFile.Logger.Info($"VoiceRecognitionService: OnVocabularyUpdated with {words.Count} words");
         UpdateGrammar(words);
     }
 
@@ -322,8 +321,6 @@ internal sealed class VoiceRecognitionService : IDisposable
             MainFile.Logger.Info("VoiceRecognitionService: grammar unchanged, skip update");
             return;
         }
-
-        MainFile.Logger.Info($"VoiceRecognitionService: updating grammar, json length={grammarJson.Length}");
 
         lock (_recognizerLock)
         {
