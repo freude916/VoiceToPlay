@@ -1,0 +1,67 @@
+<Project>
+    <!-- ========================================== -->
+    <!-- Vosk 模型自动化下载配置区（多语言多模型）  -->
+    <!-- ========================================== -->
+    <PropertyGroup>
+        <!-- 我们将模型统一下载到项目根目录下的 models 文件夹 -->
+        <ModelsDir>$(MSBuildProjectDirectory)/models</ModelsDir>
+    </PropertyGroup>
+
+    <!-- 需要自动部署的模型列表（可按需增删） -->
+    <ItemGroup>
+        <VoskModel Include="vosk-model-small-cn-0.22">
+            <Language>zh-CN</Language>
+            <Url>https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip</Url>
+        </VoskModel>
+    </ItemGroup>
+
+    <!-- 核心逻辑：在编译之前执行，已存在目录的模型会自动跳过 -->
+    <Target Name="DownloadAndExtractVoskModels" BeforeTargets="BeforeBuild">
+        <ItemGroup>
+            <MissingVoskModel Include="@(VoskModel)" Condition="!Exists('$(ModelsDir)/%(Identity)')" />
+        </ItemGroup>
+
+        <!-- 1. 确保目录存在 -->
+        <MakeDir Directories="$(ModelsDir)" />
+
+        <Message Importance="High"
+                 Text="[Vosk Mod] 以下模型已存在，跳过下载。"
+                 Condition="'@(MissingVoskModel)' == ''" />
+
+        <Message Importance="High"
+                 Text="[Vosk Mod] 正在下载缺失模型: @(MissingVoskModel->'%(Language) (%(Identity))', ', ')" 
+                 Condition="'@(MissingVoskModel)' != ''" />
+
+        <!-- 2. 跨平台下载 ZIP 文件（逐个模型） -->
+        <DownloadFile SourceUrl="%(MissingVoskModel.Url)"
+                      DestinationFolder="$(ModelsDir)"
+                      DestinationFileName="%(MissingVoskModel.Identity).zip"
+                      Condition="'@(MissingVoskModel)' != '' and !Exists('$(ModelsDir)/%(MissingVoskModel.Identity).zip')">
+            <Output TaskParameter="DownloadedFile" ItemName="DownloadedVoskModel" />
+        </DownloadFile>
+
+        <Message Importance="High"
+                 Text="[Vosk Mod] 下载完成，正在解压缺失模型..."
+                 Condition="'@(MissingVoskModel)' != ''" />
+
+        <!-- 3. 跨平台解压（逐个模型） -->
+        <Unzip SourceFiles="$(ModelsDir)/%(MissingVoskModel.Identity).zip"
+               DestinationFolder="$(ModelsDir)"
+               Condition="'@(MissingVoskModel)' != ''" />
+
+        <!-- 4. 清理垃圾：删除压缩包以节省磁盘空间 -->
+        <Delete Files="$(ModelsDir)/%(MissingVoskModel.Identity).zip"
+                Condition="'@(MissingVoskModel)' != ''" />
+
+        <Message Importance="High"
+                 Text="[Vosk] 模型部署完毕！"
+                 Condition="'@(MissingVoskModel)' != ''" />
+    </Target>
+
+    <!-- 确保编译或发布时，自动把 models 文件夹复制到输出目录 (bin/Debug 或 Mod输出目录) -->
+    <ItemGroup>
+        <None Include="models/**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
+    </ItemGroup>
+</Project>

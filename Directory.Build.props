@@ -1,0 +1,7 @@
+<Project>
+    <!-- 本地开发环境配置 - 已加入 .gitignore -->
+    <PropertyGroup>
+        <!-- Linux: 自定义 Megadot 路径 -->
+        <GodotPath>$(HOME)/Documents/MTSII/Megadot/MegaDot.x86_64</GodotPath>
+    </PropertyGroup>
+</Project>

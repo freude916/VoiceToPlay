@@ -1,0 +1,15 @@
+.git/
+.idea/
+.vs/
+.godot/
+bin/
+android/
+publish/
+properties/
+packages/
+.reference/
+models/
+.editorconfig
+*.import
+*.uid
+*.user
