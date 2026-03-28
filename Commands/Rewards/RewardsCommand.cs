@@ -1,3 +1,4 @@
+using System.Globalization;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Screens;

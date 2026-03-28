@@ -7,18 +7,8 @@ namespace VoiceToPlay.Voice.Grammar;
 ///     jieba 分词器。用于扩展语音词表。
 ///     使用延迟初始化，在首次分词时才尝试加载 jieba。
 /// </summary>
-internal sealed class JiebaTokenizer
+internal static class JiebaTokenizer
 {
-    private static readonly string[] ResourceFileNames =
-    [
-        "dict.txt",
-        "idf.txt",
-        "stopwords.txt",
-        "char_state_tab.json",
-        "prob_emit.json",
-        "prob_trans.json"
-    ];
-
     private static readonly object SyncLock = new();
     private static bool _configAttempted;
     private static bool _initializationAttempted;
@@ -29,7 +19,7 @@ internal sealed class JiebaTokenizer
     /// <summary>
     ///     预热分词器。可选调用，提前初始化。
     /// </summary>
-    public void Warmup()
+    public static void Warmup()
     {
         _ = TryEnsureSegmenter(out _);
     }
@@ -38,7 +28,7 @@ internal sealed class JiebaTokenizer
     ///     将文本分词，返回词集合。
     ///     如果 jieba 不可用，返回空集合。
     /// </summary>
-    public IReadOnlyCollection<string> Tokenize(string text)
+    public static IReadOnlyCollection<string> Tokenize(string text)
     {
         if (text.Length == 0 || !TryEnsureSegmenter(out var segmenter))
             return Array.Empty<string>();

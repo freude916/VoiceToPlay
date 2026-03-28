@@ -33,8 +33,28 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     }
 
     public AudioEffectCapture? CaptureEffect { get; private set; }
+    public AudioEffectHighPassFilter? HighPassFilter { get; private set; }
+    public AudioEffectAmplify? AmplifyEffect { get; private set; }
     public LinearPcm16Resampler Resampler { get; }
     public int FramesAvailable => CaptureEffect?.GetFramesAvailable() ?? 0;
+
+    /// <summary>
+    ///     设置高通滤波器截止频率 (Hz)
+    /// </summary>
+    public void SetHighPassCutoff(float hz)
+    {
+        if (HighPassFilter != null)
+            HighPassFilter.CutoffHz = Math.Clamp(hz, 20f, 500f);
+    }
+
+    /// <summary>
+    ///     设置增益 (dB)
+    /// </summary>
+    public void SetGainDb(float db)
+    {
+        if (AmplifyEffect != null)
+            AmplifyEffect.VolumeDb = Math.Clamp(db, -20f, 20f);
+    }
 
     /// <summary>
     ///     Jitter Buffer 播放服务，用于回放采集的音频。
@@ -44,7 +64,7 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     /// <summary>
     ///     当前输入设备名称
     /// </summary>
-    public string CurrentInputDevice => AudioServer.GetInputDevice();
+    public static string CurrentInputDevice => AudioServer.GetInputDevice();
 
     public void Dispose()
     {
@@ -97,7 +117,9 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         // 1. 创建 Capture Bus
         _busIndex = EnsureCaptureBus();
 
-        // 2. 安装 AudioEffectCapture
+        // 2. 安装音频效果：高通滤波器 -> 增益 -> 捕获
+        HighPassFilter = GetOrCreateHighPassFilter(_busIndex);
+        AmplifyEffect = GetOrCreateAmplifyEffect(_busIndex);
         CaptureEffect = GetOrCreateCaptureEffect(_busIndex);
         if (CaptureEffect != null) CaptureEffect.BufferLength = 1.0f;
 
@@ -105,12 +127,15 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         RecreateMicrophonePlayer();
 
         // 4. 创建 Jitter Buffer 播放服务
+        // ReSharper disable once HeuristicUnreachableCode
+#pragma warning disable CS0162 // Temp Debug Bool
         if (EnablePlayback)
         {
             EnsurePlaybackBus();
             _playbackService = new JitterBufferPlaybackService(_owner);
             _playbackService.Initialize(PlaybackBusName);
         }
+#pragma warning restore CS0162
 
         if (CaptureEffect == null)
         {
@@ -137,7 +162,7 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         _playbackService?.Clear();
     }
 
-    private int EnsureCaptureBus()
+    private static int EnsureCaptureBus()
     {
         var busIndex = AudioServer.GetBusIndex(CaptureBusName);
         if (busIndex < 0)
@@ -194,8 +219,32 @@ internal sealed class VoiceAudioCaptureService : IDisposable
                 return existing;
 
         var capture = new AudioEffectCapture();
-        AudioServer.AddBusEffect(busIndex, capture, 0);
+        AudioServer.AddBusEffect(busIndex, capture);
         return capture;
+    }
+
+    private static AudioEffectHighPassFilter? GetOrCreateHighPassFilter(int busIndex)
+    {
+        var effectCount = AudioServer.GetBusEffectCount(busIndex);
+        for (var i = 0; i < effectCount; i++)
+            if (AudioServer.GetBusEffect(busIndex, i) is AudioEffectHighPassFilter existing)
+                return existing;
+
+        var filter = new AudioEffectHighPassFilter { CutoffHz = 80f };
+        AudioServer.AddBusEffect(busIndex, filter, 0);
+        return filter;
+    }
+
+    private static AudioEffectAmplify? GetOrCreateAmplifyEffect(int busIndex)
+    {
+        var effectCount = AudioServer.GetBusEffectCount(busIndex);
+        for (var i = 0; i < effectCount; i++)
+            if (AudioServer.GetBusEffect(busIndex, i) is AudioEffectAmplify existing)
+                return existing;
+
+        var amplify = new AudioEffectAmplify { VolumeDb = 0f };
+        AudioServer.AddBusEffect(busIndex, amplify, 1);
+        return amplify;
     }
 
     private void RecreateMicrophonePlayer()

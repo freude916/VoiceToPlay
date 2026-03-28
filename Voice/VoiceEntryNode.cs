@@ -107,7 +107,13 @@ internal sealed partial class VoiceEntryNode : Node
         {
             Name = "VoiceDebugPanel"
         };
+        _debugPanel.OnAudioEffectsChanged += OnAudioEffectsChanged;
         AddChild(_debugPanel);
+    }
+
+    private void OnAudioEffectsChanged(float highPassHz, float gainDb)
+    {
+        _recognitionService?.SetAudioEffects(highPassHz, gainDb);
     }
 
     private void OnRecognitionTextChanged(string text)
@@ -124,7 +130,7 @@ internal sealed partial class VoiceEntryNode : Node
         if (_recognitionService != null)
             _debugPanel.SetAudioStats(
                 _recognitionService.LastPeakAmplitude,
-                _recognitionService.CurrentInputDevice);
+                VoiceRecognitionService.CurrentInputDevice);
     }
 
     public void DisposeServiceAndQueueFree()

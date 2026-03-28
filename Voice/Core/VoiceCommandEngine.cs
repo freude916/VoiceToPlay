@@ -81,7 +81,9 @@ public sealed class VoiceCommandEngine
     /// </summary>
     public IReadOnlySet<string> GetAllWords()
     {
-        return _wordToCommands.Keys.ToHashSet();
+        var words = _wordToCommands.Keys.ToHashSet();
+        words.UnionWith(Delimiters);
+        return words;
     }
 
     /// <summary>

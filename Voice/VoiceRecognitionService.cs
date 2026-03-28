@@ -14,6 +14,12 @@ namespace VoiceToPlay.Voice;
 /// </summary>
 internal sealed class VoiceRecognitionService : IDisposable
 {
+    // 调试开关：记录 Vosk 的 partial 和 final 结果
+    private const bool DebugRecognition = true;
+
+    // Partial 超时：静音超过此时间后清空误识别的 partial
+    private const float PartialTimeoutSeconds = 1.5f;
+
     private const int SampleRate = 16000;
     private const int ReadFrames = 2048;
     private const float PeakDecayRate = 0.92f;
@@ -32,8 +38,12 @@ internal sealed class VoiceRecognitionService : IDisposable
 
     // 结果队列 (后台线程 -> 主线程)
     private readonly ConcurrentQueue<RecognitionResult> _resultQueue = new();
-    private string _lastPartialText = string.Empty;
+    private string _lastPartialText = string.Empty;  // 主线程用
     private string _lastPublishedText = string.Empty;
+
+    // Partial 超时检测（后台线程专用，无需锁）
+    private string _lastPartialTextInThread = string.Empty;
+    private DateTime _lastPartialChangeTime = DateTime.UtcNow;
 
     // 状态
     private bool _listeningEnabled = true;
@@ -66,7 +76,18 @@ internal sealed class VoiceRecognitionService : IDisposable
     /// <summary>
     ///     当前输入设备名称
     /// </summary>
-    public string CurrentInputDevice => _audioCapture.CurrentInputDevice;
+    public static string CurrentInputDevice => VoiceAudioCaptureService.CurrentInputDevice;
+
+    /// <summary>
+    ///     设置音频效果参数
+    /// </summary>
+    /// <param name="highPassCutoffHz">高通滤波器截止频率 (Hz)</param>
+    /// <param name="gainDb">增益 (dB)</param>
+    public void SetAudioEffects(float highPassCutoffHz, float gainDb)
+    {
+        _audioCapture.SetHighPassCutoff(highPassCutoffHz);
+        _audioCapture.SetGainDb(gainDb);
+    }
 
     public void Dispose()
     {
@@ -149,14 +170,13 @@ internal sealed class VoiceRecognitionService : IDisposable
         _listeningEnabled = enabled;
         MainFile.Logger.Info($"Voice listening: {(enabled ? "enabled" : "disabled")}");
 
-        if (!enabled)
-        {
-            LastPeakAmplitude = 0f;
-            _lastPartialText = string.Empty;
-            PublishRecognitionText(string.Empty, true);
-            _audioCapture.ClearTransientBuffers();
-            ClearAudioQueue();
-        }
+        if (enabled) return;
+        
+        LastPeakAmplitude = 0f;
+        _lastPartialText = string.Empty;
+        PublishRecognitionText(string.Empty, true);
+        _audioCapture.ClearTransientBuffers();
+        ClearAudioQueue();
     }
 
     /// <summary>
@@ -235,6 +255,7 @@ internal sealed class VoiceRecognitionService : IDisposable
     private void ProcessResults()
     {
         while (_resultQueue.TryDequeue(out var result))
+        {
             if (result.IsFinal)
             {
                 var text = ExtractText(result.Json);
@@ -248,12 +269,16 @@ internal sealed class VoiceRecognitionService : IDisposable
             else
             {
                 var partial = ExtractPartialText(result.Json);
-                if (!string.IsNullOrEmpty(partial) && partial != _lastPartialText)
-                {
-                    _lastPartialText = partial;
-                    PublishRecognitionText(partial);
-                }
+                if (partial == _lastPartialText) continue;
+
+                if (DebugRecognition)
+                    MainFile.Logger.Info($"[DEBUG] Partial changed: '{_lastPartialText}' -> '{partial}'");
+
+                // 允许空 partial 清空 UI（超时丢弃）
+                _lastPartialText = partial;
+                PublishRecognitionText(partial);
             }
+        }
     }
 
     private void StartRecognitionThread()
@@ -277,6 +302,17 @@ internal sealed class VoiceRecognitionService : IDisposable
             {
                 if (!_running) break;
 
+                // 检查 partial 超时：如果 partial 非空且超时，发送清空信号
+                var now = DateTime.UtcNow;
+                if (!string.IsNullOrEmpty(_lastPartialTextInThread) &&
+                    (now - _lastPartialChangeTime).TotalSeconds > PartialTimeoutSeconds)
+                {
+                    if (DebugRecognition)
+                        MainFile.Logger.Info($"[DEBUG] Partial timeout, clearing: '{_lastPartialTextInThread}'");
+                    _lastPartialTextInThread = string.Empty;
+                    _resultQueue.Enqueue(new RecognitionResult("{\"partial\":\"\"}", false));
+                }
+
                 VoskRecognizer? recognizer;
                 lock (_recognizerLock)
                 {
@@ -291,6 +327,17 @@ internal sealed class VoiceRecognitionService : IDisposable
                 {
                     isFinal = recognizer.AcceptWaveform(data, data.Length);
                     json = isFinal ? recognizer.Result() : recognizer.PartialResult();
+                }
+
+                // 更新 partial 变化时间（用于超时检测）
+                if (!isFinal)
+                {
+                    var partial = ExtractPartialText(json);
+                    if (partial != _lastPartialTextInThread)
+                    {
+                        _lastPartialTextInThread = partial;
+                        _lastPartialChangeTime = now;
+                    }
                 }
 
                 var result = new RecognitionResult(json, isFinal);

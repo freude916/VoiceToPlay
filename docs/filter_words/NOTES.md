@@ -44,11 +44,11 @@ fstprint Gr.fst | awk '{print $3}' | grep -v '^<eps>$' | sort -u > words.txt
 
 ### FST 类型
 
-| 类型 | 说明 |
-|------|------|
-| ngram | 语言模型 FST，Gr.fst 常见 |
+| 类型               | 说明                       |
+|------------------|--------------------------|
+| ngram            | 语言模型 FST，Gr.fst 常见       |
 | olabel_lookahead | 带输出标签预查的 FST，HCLr.fst 常见 |
-| standard | 标准 FST |
+| standard         | 标准 FST                   |
 
 ---
 
@@ -140,7 +140,4 @@ LD_LIBRARY_PATH=/opt/kaldi/tools/openfst-1.8.4/lib:/opt/kaldi/tools/openfst-1.8.
 
 ### 3. 使用过滤后的词库
 
-```python
-import jieba
-jieba.set_dictionary("/path/to/filtered_jieba/dict.txt")
-```
+直接覆盖了原来的 Resources 。

@@ -41,7 +41,7 @@ public static class CombatTargetState
     public static void SetSelectedEnemy(int index, Creature enemy)
     {
         // 隐藏旧的准星
-        if (TryGetSelectedEnemyNode(out var previousNode))
+        if (TryGetSelectedEnemyNode(out var previousNode) && previousNode != null)
             previousNode.HideSingleSelectReticle();
 
         // 显示新的准星
@@ -66,7 +66,7 @@ public static class CombatTargetState
     /// </summary>
     public static void Clear()
     {
-        if (TryGetSelectedEnemyNode(out var node))
+        if (TryGetSelectedEnemyNode(out var node) && node != null)
             node.HideSingleSelectReticle();
 
         _selectedEnemyNodeRef = null;

@@ -158,7 +158,7 @@ public sealed class CardRowSelectCommand : IVoiceCommand
                 break;
 
             default:
-                MainFile.Logger.Warn($"CardSelectionCommand: unknown target type {target?.GetType()}");
+                MainFile.Logger.Warn($"CardSelectionCommand: unknown target type {target.GetType()}");
                 break;
         }
     }

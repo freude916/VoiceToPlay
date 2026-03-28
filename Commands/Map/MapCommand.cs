@@ -108,12 +108,6 @@ public sealed class MapCommand : IVoiceCommand
             return [];
         }
 
-        if (!mapScreen.IsTravelEnabled)
-        {
-            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: IsTravelEnabled is false");
-            return [];
-        }
-
         if (mapScreen.IsTraveling)
         {
             MainFile.Logger.Info("MapCommand.ComputeSupportedWords: IsTraveling is true");
@@ -145,9 +139,6 @@ public sealed class MapCommand : IVoiceCommand
             // 中文: 第一条, 第二条...
             _wordToIndex[$"第{ChineseNumbers[oneBased]}条"] = i;
             _wordToIndex[$"第{ChineseNumbers[oneBased]}"] = i;
-            // 数字: 第1条, 第2条...
-            _wordToIndex[$"第{oneBased}条"] = i;
-            _wordToIndex[$"第{oneBased}"] = i;
         }
 
         return new HashSet<string>(_wordToIndex.Keys, StringComparer.Ordinal);
@@ -155,7 +146,7 @@ public sealed class MapCommand : IVoiceCommand
 
     private static IReadOnlyList<MapCoord> GetTravelableCoords()
     {
-        var runState = RunManager.Instance?.State;
+        var runState = RunManager.Instance.State;
         if (runState?.Map == null) return [];
 
         var current = runState.CurrentMapPoint;
@@ -173,8 +164,6 @@ public sealed class MapCommand : IVoiceCommand
 
     private static NMapPoint? FindMapPointByCoord(Node root, MapCoord coord)
     {
-        if (root == null) return null;
-
         var stack = new Stack<Node>();
         stack.Push(root);
         while (stack.Count > 0)
@@ -184,8 +173,8 @@ public sealed class MapCommand : IVoiceCommand
                 return mapPoint;
 
             foreach (var child in node.GetChildren())
-                if (child is Node childNode)
-                    stack.Push(childNode);
+                if (child != null)
+                    stack.Push(child);
         }
 
         return null;

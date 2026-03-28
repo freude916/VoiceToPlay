@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
+
 namespace VoiceToPlay.Voice.Grammar;
 
 /// <summary>
@@ -8,13 +9,22 @@ namespace VoiceToPlay.Voice.Grammar;
 /// </summary>
 internal sealed class GrammarSession
 {
+    /// <summary>
+    ///     是否输出完整词表日志。
+    /// </summary>
+    private const bool LogFullGrammar = false;
+
+    /// <summary>
+    ///     是否输出词表变化 diff 日志。
+    /// </summary>
+    private const bool LogGrammarDiff = false;
+
     // 禁用 Unicode 转义，Vosk/Kaldi 不认 \uXXXX
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    private readonly JiebaTokenizer _tokenizer = new();
     private HashSet<string> _activeWords = new(StringComparer.Ordinal);
 
     /// <summary>
@@ -30,20 +40,45 @@ internal sealed class GrammarSession
             expandedWords.Add(word);
 
             // 分词扩展
-            foreach (var token in _tokenizer.Tokenize(word))
+            foreach (var token in JiebaTokenizer.Tokenize(word))
                 expandedWords.Add(token);
         }
 
         // 检查是否有变化
         if (_activeWords.SetEquals(expandedWords))
             return string.Empty; // 无变化
+        
+        #pragma warning disable CS0162 // Debug
+        // ReSharper disable HeuristicUnreachableCode
+        // 计算 diff
+        if (LogGrammarDiff)
+        {
+            var added = expandedWords.Except(_activeWords).ToList();
+            var removed = _activeWords.Except(expandedWords).ToList();
+            
+            if (added.Count > 0)
+            {
+
+                MainFile.Logger.Info($"GrammarSession: added words: [{string.Join(", ", added)}]");
+            }
+            
+            if (removed.Count > 0)
+            {
+                MainFile.Logger.Info($"GrammarSession: removed words: [{string.Join(", ", removed)}]");
+            }
+        }
 
         _activeWords = expandedWords;
 
         // 生成 JSON（不转义中文）
         var sorted = expandedWords.OrderBy(w => w).ToList();
         var json = JsonSerializer.Serialize(sorted, JsonOptions);
-        MainFile.Logger.Info($"GrammarSession: generated grammar with words: {json}");
+
+        if (LogFullGrammar)
+            MainFile.Logger.Info($"GrammarSession: generated grammar with {sorted.Count} words: {json}");
+        
+        // ReSharper restore HeuristicUnreachableCode
+        #pragma warning restore CS0162
         return json;
     }
 }

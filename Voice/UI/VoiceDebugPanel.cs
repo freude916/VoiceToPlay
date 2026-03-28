@@ -8,6 +8,11 @@ namespace VoiceToPlay.Voice.UI;
 public sealed partial class VoiceDebugPanel : PanelContainer
 {
     /// <summary>
+    ///     是否显示音频效果调试控件
+    /// </summary>
+    private const bool DebugAudioEffects = true;
+
+    /// <summary>
     ///     面板默认宽度
     /// </summary>
     private const float PanelWidth = 300f;
@@ -23,6 +28,9 @@ public sealed partial class VoiceDebugPanel : PanelContainer
     private const float MarginTop = 50f;
 
     private Label? _audioLabel;
+    private Label? _debugEffectsLabel;
+    private HSlider? _highPassSlider;
+    private HSlider? _gainSlider;
 
     private string _currentResult = "-";
     private bool _hasError;
@@ -32,6 +40,11 @@ public sealed partial class VoiceDebugPanel : PanelContainer
     private Label? _resultLabel;
     private Label? _statusLabel;
     private ProgressBar? _volumeBar;
+
+    /// <summary>
+    ///     音频效果参数变化事件
+    /// </summary>
+    public event Action<float, float>? OnAudioEffectsChanged;
 
     public override void _Ready()
     {
@@ -43,7 +56,10 @@ public sealed partial class VoiceDebugPanel : PanelContainer
         OffsetLeft = -(MarginRight + PanelWidth);
         OffsetRight = -MarginRight;
         OffsetTop = MarginTop;
-        OffsetBottom = MarginTop + 120f;
+
+        // 调试模式下增加面板高度
+        var baseHeight = DebugAudioEffects ? 200f : 120f;
+        OffsetBottom = MarginTop + baseHeight;
         ZIndex = 1000;
 
         // 半透明背景
@@ -115,7 +131,97 @@ public sealed partial class VoiceDebugPanel : PanelContainer
             CustomMinimumSize = new Vector2(PanelWidth - 24, 16)
         };
         vbox.AddChild(_volumeBar);
+
+#if DEBUG
+        if (DebugAudioEffects)
+            CreateDebugControls(vbox);
+#endif
     }
+
+#if DEBUG
+    private void CreateDebugControls(VBoxContainer vbox)
+    {
+        // 分隔标题
+        _debugEffectsLabel = new Label
+        {
+            Text = "── 音效调试 ──",
+            HorizontalAlignment = HorizontalAlignment.Center,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        _debugEffectsLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+        _debugEffectsLabel.AddThemeConstantOverride("outline_size", 2);
+        _debugEffectsLabel.AddThemeColorOverride("font_color", new Color("FFD700"));
+        vbox.AddChild(_debugEffectsLabel);
+
+        // 高通滤波器滑块
+        var highPassRow = new HBoxContainer
+        {
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        var highPassLabel = new Label
+        {
+            Text = "高通(Hz):",
+            MouseFilter = MouseFilterEnum.Ignore,
+            CustomMinimumSize = new Vector2(70, 0)
+        };
+        highPassLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+        highPassLabel.AddThemeConstantOverride("outline_size", 2);
+        highPassRow.AddChild(highPassLabel);
+
+        _highPassSlider = new HSlider
+        {
+            MinValue = 20,
+            MaxValue = 500,
+            Step = 10,
+            Value = 80,
+            CustomMinimumSize = new Vector2(PanelWidth - 100, 20),
+            MouseFilter = MouseFilterEnum.Pass
+        };
+        _highPassSlider.ValueChanged += OnHighPassChanged;
+        highPassRow.AddChild(_highPassSlider);
+        vbox.AddChild(highPassRow);
+
+        // 增益滑块
+        var gainRow = new HBoxContainer
+        {
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        var gainLabel = new Label
+        {
+            Text = "增益(dB):",
+            MouseFilter = MouseFilterEnum.Ignore,
+            CustomMinimumSize = new Vector2(70, 0)
+        };
+        gainLabel.AddThemeColorOverride("font_outline_color", Colors.Black);
+        gainLabel.AddThemeConstantOverride("outline_size", 2);
+        gainRow.AddChild(gainLabel);
+
+        _gainSlider = new HSlider
+        {
+            MinValue = -20,
+            MaxValue = 20,
+            Step = 1,
+            Value = 0,
+            CustomMinimumSize = new Vector2(PanelWidth - 100, 20),
+            MouseFilter = MouseFilterEnum.Pass
+        };
+        _gainSlider.ValueChanged += OnGainChanged;
+        gainRow.AddChild(_gainSlider);
+        vbox.AddChild(gainRow);
+    }
+
+    private void OnHighPassChanged(double value)
+    {
+        if (_gainSlider != null)
+            OnAudioEffectsChanged?.Invoke((float)value, (float)_gainSlider.Value);
+    }
+
+    private void OnGainChanged(double value)
+    {
+        if (_highPassSlider != null)
+            OnAudioEffectsChanged?.Invoke((float)_highPassSlider.Value, (float)value);
+    }
+#endif
 
     /// <summary>
     ///     设置监听状态

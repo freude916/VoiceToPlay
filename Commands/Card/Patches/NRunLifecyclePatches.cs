@@ -11,6 +11,8 @@ namespace VoiceToPlay.Commands.Card.Patches;
 [HarmonyPatch(typeof(NRun), MethodType.Constructor)]
 internal static class NRunConstructorPatch
 {
+    private const bool DebugHandChanges = false;
+
     private static void Postfix(NRun __instance)
     {
         __instance.Ready += () =>
@@ -39,18 +41,17 @@ internal static class NRunConstructorPatch
 
     private static void OnHandContentsChanged()
     {
-        MainFile.Logger.Info("Hand contents changed, refreshing vocabulary");
+        # pragma warning disable CS0162 // Temp Debug Bool
+        if (DebugHandChanges){
+            MainFile.Logger.Info("Hand contents changed, refreshing vocabulary");
+        }
+        # pragma warning restore CS0162
         PlayCardCommand.RefreshVocabulary();
     }
 
     private static void SubscribeToCombatEvents()
     {
         var combatManager = CombatManager.Instance;
-        if (combatManager == null)
-        {
-            MainFile.Logger.Warn("SubscribeToCombatEvents: CombatManager.Instance is null");
-            return;
-        }
 
         combatManager.TurnStarted += OnTurnStarted;
         MainFile.Logger.Info("Subscribed to CombatManager.TurnStarted");
@@ -59,7 +60,6 @@ internal static class NRunConstructorPatch
     private static void UnsubscribeFromCombatEvents()
     {
         var combatManager = CombatManager.Instance;
-        if (combatManager == null) return;
 
         combatManager.TurnStarted -= OnTurnStarted;
         MainFile.Logger.Info("Unsubscribed from CombatManager.TurnStarted");
@@ -67,7 +67,7 @@ internal static class NRunConstructorPatch
 
     private static void SubscribeToHandChanges()
     {
-        var combatState = CombatManager.Instance?.DebugOnlyGetState();
+        var combatState = CombatManager.Instance.DebugOnlyGetState();
         if (combatState == null)
         {
             MainFile.Logger.Warn("SubscribeToHandChanges: combatState is null");
@@ -94,7 +94,7 @@ internal static class NRunConstructorPatch
 
     private static void UnsubscribeFromHandChanges()
     {
-        var combatState = CombatManager.Instance?.DebugOnlyGetState();
+        var combatState = CombatManager.Instance.DebugOnlyGetState();
         if (combatState == null) return;
 
         var player = LocalContext.GetMe(combatState);

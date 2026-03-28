@@ -118,14 +118,22 @@
     <ItemGroup>
         <Content Include="AGENTS.md"/>
         <Content Include="Directory.Build.props"/>
-        <Content Include="docs\.COMMANDS.md.kate-swp" />
         <Content Include="docs\COMMANDS.md" />
         <Content Include="docs\filter_words\extract_vocab.py" />
         <Content Include="docs\filter_words\NOTES.md" />
         <Content Include="docs\filter_words\small_model_words.txt" />
+        <Content Include="jieba\Resources\char_state_tab.json" />
+        <Content Include="jieba\Resources\cn_synonym.txt" />
+        <Content Include="jieba\Resources\dict.txt" />
+        <Content Include="jieba\Resources\idf.txt" />
+        <Content Include="jieba\Resources\pos_prob_emit.json" />
+        <Content Include="jieba\Resources\pos_prob_start.json" />
+        <Content Include="jieba\Resources\pos_prob_trans.json" />
+        <Content Include="jieba\Resources\prob_emit.json" />
+        <Content Include="jieba\Resources\prob_trans.json" />
+        <Content Include="jieba\Resources\stopwords.txt" />
         <Content Include="Voice\ARCHITECTURE.md"/>
         <Content Include="Voice\SNIPPETS.md"/>
-        <Content Include="Voice\SNIPPETS_cmd_engine.md"/>
     </ItemGroup>
 
     <Target Name="CheckDependencyPaths">
@@ -167,6 +175,7 @@
         <Copy SourceFiles="@(VoskLinuxNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(VoskOsxNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="VoiceToPlay.json" DestinationFiles="$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).json"/>
+        <Copy SourceFiles="README.md" DestinationFiles="$(ModsPath)$(MSBuildProjectName)/README.md" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(ModModelFiles)" DestinationFiles="@(ModModelFiles->'$(ModsPath)$(MSBuildProjectName)/models/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true"/>
         <Message Text="Copying BaseLib to mods folder." Importance="high"/>
         <ItemGroup>
@@ -181,7 +190,8 @@
 
     <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'">
         <Message Text="Exporting Godot .pck to mods folder" Importance="high"/>
-        <Exec Command="&quot;$(GodotPath)&quot; --headless --assembly-search-paths=&quot;$(Sts2DataDir)&quot; --export-pack &quot;BasicExport&quot; &quot;$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).pck&quot;" EnvironmentVariables="IsInnerGodotExport=true;MSBUILDDISABLENODEREUSE=1" ContinueOnError="WarnAndContinue"/>
+        <Message Text="Assembly search paths: $(TargetDir);$(Sts2DataDir)" Importance="high"/>
+        <Exec Command="&quot;$(GodotPath)&quot; --headless --assembly-search-paths=&quot;$(TargetDir);$(Sts2DataDir)&quot; --export-pack &quot;BasicExport&quot; &quot;$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).pck&quot;" EnvironmentVariables="IsInnerGodotExport=true;MSBUILDDISABLENODEREUSE=1" ContinueOnError="WarnAndContinue"/>
     </Target>
 
     <Target Name="GodotPublishSkipped" AfterTargets="Publish" Condition="'$(GodotPath)' == '' or !Exists('$(GodotPath)')">

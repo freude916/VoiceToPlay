@@ -101,6 +101,10 @@ public sealed class PlayCardCommand : IVoiceCommand
 
         var queued = matchedCard.TryManualPlay(target);
         MainFile.Logger.Info($"PlayCardCommand: '{word}' -> {normalizedCardName}#{occurrence}, queued={queued}");
+        
+        // 立即刷新词表，避免同一张卡被重复使用
+        if (queued)
+            RefreshVocabulary();
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
