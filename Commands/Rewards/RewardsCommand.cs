@@ -59,6 +59,19 @@ public sealed class RewardsCommand : IVoiceCommand
                         return true;
 
                     };
+
+                    if (cardRewardIndex == 1)
+                    {
+                        // first card with alias
+                        var word0 = "卡牌";
+                        _wordToAction[word0] = () =>
+                        {
+                            if (!GodotObject.IsInstanceValid(capturedButton)) return false;
+                            capturedButton.ForceClick();
+                            return true;
+                        };
+                    }
+                    
                     continue;
                 }
 
@@ -114,10 +127,10 @@ public sealed class RewardsCommand : IVoiceCommand
         return reward switch
         {
             GoldReward => "金币",
-            RelicReward relic => VoiceText.Normalize(relic.ClaimedRelic?.Title.GetFormattedText()),
-            PotionReward potion => VoiceText.Normalize(potion.ClaimedPotion?.Title.GetFormattedText()),
+            RelicReward relic => VoiceText.Normalize(relic._relic?.Title.GetFormattedText()),
+            PotionReward potion => VoiceText.Normalize(potion.Potion?.Title.GetFormattedText()),
             SpecialCardReward special => VoiceText.Normalize(special.Description.GetFormattedText()),
-            _ => VoiceText.Normalize(reward.Description?.GetFormattedText())
+            _ => VoiceText.Normalize(reward.Description.GetFormattedText())
         };
     }
 
@@ -125,7 +138,7 @@ public sealed class RewardsCommand : IVoiceCommand
     {
         var clicked = false;
         foreach (var button in EnumerateRewardButtons(screen))
-            if (button?.Reward is GoldReward && GodotObject.IsInstanceValid(button))
+            if (button.Reward is GoldReward && GodotObject.IsInstanceValid(button))
             {
                 button.ForceClick();
                 clicked = true;

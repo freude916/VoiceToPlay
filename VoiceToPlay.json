@@ -3,8 +3,8 @@
   "pck_name": "VoiceToPlay",
   "name": "VoiceToPlay",
   "author": "VoiceToPlay",
-  "description": "Voice card play mod for Slay the Spire 2 (Vosk, card-name driven)",
-  "version": "v0.1.0",
+  "description": "杀戮尖塔 2 语音游玩 Mod",
+  "version": "v0.2.0",
   "has_dll": true,
   "has_pck": false,
   "affects_gameplay": true

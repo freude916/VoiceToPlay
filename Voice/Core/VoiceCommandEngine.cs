@@ -8,7 +8,7 @@ public sealed class VoiceCommandEngine
     /// <summary>
     ///     分割符：用于从语音流切分到多个命令
     /// </summary>
-    private static readonly string[] Delimiters = ["嗯", "然后", "接着", "再", "和"];
+    private static readonly string[] Delimiters = ["嗯", "然后", "接着", "再", "和", "一下", "就", "得了", "吧"];
 
     /// <summary>
     ///     所有已注册的命令
@@ -30,6 +30,7 @@ public sealed class VoiceCommandEngine
     /// </summary>
     public void Register(IVoiceCommand command)
     {
+        ArgumentNullException.ThrowIfNull(command);
         _commands.Add(command);
         command.VocabularyChanged += OnCommandVocabularyChanged;
         RebuildWordToCommandsMap();
@@ -40,6 +41,7 @@ public sealed class VoiceCommandEngine
     /// </summary>
     public void Unregister(IVoiceCommand command)
     {
+        ArgumentNullException.ThrowIfNull(command);
         if (_commands.Remove(command))
         {
             command.VocabularyChanged -= OnCommandVocabularyChanged;
@@ -87,9 +89,10 @@ public sealed class VoiceCommandEngine
     /// </summary>
     public void Process(string text)
     {
+        ArgumentNullException.ThrowIfNull(text);
         var words = SplitWords(text);
         foreach (var word in words)
-            if (_wordToCommands.TryGetValue(word, out var commands))
+            if (!string.IsNullOrWhiteSpace(word) && _wordToCommands.TryGetValue(word, out var commands))
                 foreach (var cmd in commands)
                     cmd.Execute(word);
     }
@@ -99,17 +102,8 @@ public sealed class VoiceCommandEngine
     /// </summary>
     private static List<string> SplitWords(string text)
     {
-        var result = new List<string>();
-        var remaining = text;
-        foreach (var delimiter in Delimiters)
-            remaining = remaining.Replace(delimiter, "|");
-        foreach (var part in remaining.Split('|'))
-        {
-            var word = VoiceText.Normalize(part);
-            if (!string.IsNullOrEmpty(word))
-                result.Add(word);
-        }
+        var remaining = Delimiters.Aggregate(text, (current, delimiter) => current.Replace(delimiter, "|"));
 
-        return result;
+        return [.. remaining.Split('|').Select(VoiceText.Normalize).Where(word => !string.IsNullOrEmpty(word))];
     }
 }
