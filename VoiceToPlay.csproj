@@ -118,6 +118,11 @@
     <ItemGroup>
         <Content Include="AGENTS.md"/>
         <Content Include="Directory.Build.props"/>
+        <Content Include="docs\.COMMANDS.md.kate-swp" />
+        <Content Include="docs\COMMANDS.md" />
+        <Content Include="docs\filter_words\extract_vocab.py" />
+        <Content Include="docs\filter_words\NOTES.md" />
+        <Content Include="docs\filter_words\small_model_words.txt" />
         <Content Include="Voice\ARCHITECTURE.md"/>
         <Content Include="Voice\SNIPPETS.md"/>
         <Content Include="Voice\SNIPPETS_cmd_engine.md"/>
