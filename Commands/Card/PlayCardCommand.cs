@@ -18,7 +18,11 @@ public sealed class PlayCardCommand : IVoiceCommand
 {
     // 词 → (卡牌名, occurrence)
     private readonly Dictionary<string, (string NormalizedName, int Occurrence)> _wordToCard = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public PlayCardCommand()
     {
@@ -27,60 +31,10 @@ public sealed class PlayCardCommand : IVoiceCommand
 
     public static PlayCardCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToCard.Clear();
-
-            // 如果在手牌选牌模式（消耗/升级等），禁用出牌命令
-            if (NPlayerHand.Instance?.IsInCardSelection == true) return [];
-
-            // 如果有 overlay 打开（选牌屏幕等），禁用出牌命令
-            if (NOverlayStack.Instance?.Peek() != null) return [];
-
-            var combatState = CombatManager.Instance?.DebugOnlyGetState();
-            if (combatState == null) return [];
-
-            var player = LocalContext.GetMe(combatState);
-            var hand = player?.PlayerCombatState?.Hand?.Cards;
-            if (hand == null) return [];
-
-            // 统计每张卡的出现次数
-            var cardCountByName = new Dictionary<string, int>(StringComparer.Ordinal);
-            var cardsByName = new Dictionary<string, List<CardModel>>(StringComparer.Ordinal);
-
-            foreach (var card in hand)
-            {
-                var normalizedName = VoiceText.Normalize(VoiceText.GetCardCommandName(card));
-                if (string.IsNullOrEmpty(normalizedName)) continue;
-
-                if (!cardsByName.TryGetValue(normalizedName, out var list))
-                    cardsByName[normalizedName] = list = [];
-                list.Add(card);
-
-                cardCountByName.TryGetValue(normalizedName, out var count);
-                cardCountByName[normalizedName] = count + 1;
-            }
-
-            // 按卡名长度降序（优先匹配长名）
-            var sortedNames = cardsByName.Keys.OrderByDescending(n => n).ToList();
-
-            foreach (var normalizedName in sortedNames)
-            {
-                var count = cardCountByName[normalizedName];
-
-                // 使用 CardIndexedCommandCatalog 生成带中文数字后缀的词表
-                foreach (var word in CardIndexedCommandCatalog.EnumerateIndexedCommands(normalizedName))
-                    if (CardIndexedCommandCatalog.TryParseOccurrence(word, normalizedName, out var occurrence))
-                        // 只生成实际存在的数量
-                        if (occurrence <= count)
-                            _wordToCard[word] = (normalizedName, occurrence);
-            }
-
-            return _wordToCard.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -151,17 +105,75 @@ public sealed class PlayCardCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
     public static void RefreshVocabulary()
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords, StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
         {
-            instance._lastWords = currentWords;
+            instance._cachedWords = newWords;
             instance.VocabularyChanged?.Invoke(instance);
         }
+    }
+
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToCard.Clear();
+
+        // 如果在手牌选牌模式（消耗/升级等），禁用出牌命令
+        if (NPlayerHand.Instance?.IsInCardSelection == true) return [];
+
+        // 如果有 overlay 打开（选牌屏幕等），禁用出牌命令
+        if (NOverlayStack.Instance?.Peek() != null) return [];
+
+        var combatState = CombatManager.Instance?.DebugOnlyGetState();
+        if (combatState == null) return [];
+
+        var player = LocalContext.GetMe(combatState);
+        var hand = player?.PlayerCombatState?.Hand?.Cards;
+        if (hand == null) return [];
+
+        // 统计每张卡的出现次数
+        var cardCountByName = new Dictionary<string, int>(StringComparer.Ordinal);
+        var cardsByName = new Dictionary<string, List<CardModel>>(StringComparer.Ordinal);
+
+        foreach (var card in hand)
+        {
+            var normalizedName = VoiceText.Normalize(VoiceText.GetCardCommandName(card));
+            if (string.IsNullOrEmpty(normalizedName)) continue;
+
+            if (!cardsByName.TryGetValue(normalizedName, out var list))
+                cardsByName[normalizedName] = list = [];
+            list.Add(card);
+
+            cardCountByName.TryGetValue(normalizedName, out var count);
+            cardCountByName[normalizedName] = count + 1;
+        }
+
+        // 按卡名长度降序（优先匹配长名）
+        var sortedNames = cardsByName.Keys.OrderByDescending(n => n).ToList();
+
+        foreach (var normalizedName in sortedNames)
+        {
+            var count = cardCountByName[normalizedName];
+
+            // 使用 CardIndexedCommandCatalog 生成带中文数字后缀的词表
+            foreach (var word in CardIndexedCommandCatalog.EnumerateIndexedCommands(normalizedName))
+                if (CardIndexedCommandCatalog.TryParseOccurrence(word, normalizedName, out var occurrence))
+                    // 只生成实际存在的数量
+                    if (occurrence <= count)
+                        _wordToCard[word] = (normalizedName, occurrence);
+        }
+
+        return new HashSet<string>(_wordToCard.Keys, StringComparer.Ordinal);
     }
 
     private static Creature? ResolveTarget(CardModel card, CombatState combatState)

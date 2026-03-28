@@ -174,6 +174,9 @@ internal sealed class VoiceRecognitionService : IDisposable
 
         // 采集音频
         CaptureAudio();
+
+        // 处理 Jitter Buffer 播放
+        _audioCapture.PlaybackService?.Tick();
     }
 
     private void CaptureAudio()
@@ -187,6 +190,9 @@ internal sealed class VoiceRecognitionService : IDisposable
         var framesToRead = Math.Min(framesAvailable, ReadFrames);
         var stereoData = capture.GetBuffer(framesToRead);
         if (stereoData.Length == 0) return;
+
+        // 喂给 Jitter Buffer 播放器
+        _audioCapture.PlaybackService?.FeedAudio(stereoData);
 
         // 混音为 mono，同时计算峰值
         EnsureMonoBuffer(stereoData.Length);

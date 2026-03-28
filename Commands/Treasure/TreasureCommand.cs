@@ -34,7 +34,11 @@ public sealed class TreasureCommand : IVoiceCommand
     };
 
     private readonly Dictionary<string, string> _normalizedToRaw = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public TreasureCommand()
     {
@@ -43,7 +47,10 @@ public sealed class TreasureCommand : IVoiceCommand
 
     public static TreasureCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords => GetSupportedWords();
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -86,7 +93,26 @@ public sealed class TreasureCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
-    private IEnumerable<string> GetSupportedWords()
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
+    public static void RefreshVocabulary()
+    {
+        var instance = Instance;
+        if (instance == null) return;
+
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
+        {
+            instance._cachedWords = newWords;
+            instance.VocabularyChanged?.Invoke(instance);
+        }
+    }
+
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
     {
         _normalizedToRaw.Clear();
 
@@ -114,10 +140,10 @@ public sealed class TreasureCommand : IVoiceCommand
                     _normalizedToRaw[word] = word;
                 MainFile.Logger.Info("TreasureCommand: chest not opened, showing '打开宝箱'");
             }
-            return _normalizedToRaw.Keys;
+            return new HashSet<string>(_normalizedToRaw.Keys, StringComparer.Ordinal);
         }
 
-        MainFile.Logger.Info($"TreasureCommand.GetSupportedWords: {holders.Count} enabled holders");
+        MainFile.Logger.Info($"TreasureCommand.ComputeSupportedWords: {holders.Count} enabled holders");
 
         // 遗物选择模式
         foreach (var word in _relicWords)
@@ -134,20 +160,7 @@ public sealed class TreasureCommand : IVoiceCommand
                 _normalizedToRaw[relicName] = relicName;
         }
 
-        return _normalizedToRaw.Keys;
-    }
-
-    public static void RefreshVocabulary()
-    {
-        var instance = Instance;
-        if (instance == null) return;
-
-        var currentWords = new HashSet<string>(instance.GetSupportedWords(), StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
-        {
-            instance._lastWords = currentWords;
-            instance.VocabularyChanged?.Invoke(instance);
-        }
+        return new HashSet<string>(_normalizedToRaw.Keys, StringComparer.Ordinal);
     }
 
     private static NButton? FindChestButton(NTreasureRoom treasureRoom)

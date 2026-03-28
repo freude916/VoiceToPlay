@@ -60,30 +60,17 @@ public sealed class VoiceCommandEngine
     }
 
     /// <summary>
-    ///     重建映射表
+    ///     重建映射表（所有命令现在都用缓存，不会抛异常）
     /// </summary>
     private void RebuildWordToCommandsMap()
     {
         _wordToCommands.Clear();
         foreach (var cmd in _commands)
+        foreach (var word in cmd.SupportedWords)
         {
-            IEnumerable<string> words;
-            try
-            {
-                words = cmd.SupportedWords;
-            }
-            catch (Exception e)
-            {
-                MainFile.Logger.Warn($"VoiceCommandEngine: {cmd.GetType().Name}.SupportedWords threw: {e.Message}");
-                continue;
-            }
-
-            foreach (var word in words)
-            {
-                if (!_wordToCommands.TryGetValue(word, out var list))
-                    _wordToCommands[word] = list = [];
-                list.Add(cmd);
-            }
+            if (!_wordToCommands.TryGetValue(word, out var list))
+                _wordToCommands[word] = list = [];
+            list.Add(cmd);
         }
     }
 

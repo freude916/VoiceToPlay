@@ -12,8 +12,12 @@ namespace VoiceToPlay.Commands.MainMenu;
 /// </summary>
 public sealed class MainMenuCommand : IVoiceCommand
 {
-    private HashSet<string> _lastWords = new();
     private readonly Dictionary<string, NButton> _wordToButton = new();
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public MainMenuCommand()
     {
@@ -25,36 +29,10 @@ public sealed class MainMenuCommand : IVoiceCommand
     /// </summary>
     public static MainMenuCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToButton.Clear();
-            var mainMenu = NGame.Instance?.MainMenu;
-            if (mainMenu == null) return [];  // 不在主菜单，静默返回空
-
-            var buttonInfos = new List<string>();
-            foreach (var button in mainMenu.MainMenuButtons)
-            {
-                if (button == null || !button.IsEnabled || !button.IsVisibleInTree())
-                    continue;
-
-                var text = GetButtonText(button);
-                if (string.IsNullOrEmpty(text)) continue;
-
-                var normalized = VoiceText.Normalize(text);
-                if (!string.IsNullOrEmpty(normalized))
-                {
-                    _wordToButton[normalized] = button;
-                    buttonInfos.Add($"'{normalized}'->{button.Name}");
-                }
-            }
-
-            if (buttonInfos.Count > 0)
-                MainFile.Logger.Info($"MainMenuCommand: buttons=[{string.Join(", ", buttonInfos)}]");
-            return _wordToButton.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -79,20 +57,52 @@ public sealed class MainMenuCommand : IVoiceCommand
     public event Action<IVoiceCommand>? VocabularyChanged;
 
     /// <summary>
-    ///     刷新词表并通知上层（由 Patch 调用）
+    ///     刷新词表缓存，由 Patch 调用
     /// </summary>
     public static void RefreshVocabulary()
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords);
-        if (!currentWords.SetEquals(instance._lastWords))
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
         {
-            instance._lastWords = currentWords;
+            instance._cachedWords = newWords;
             MainFile.Logger.Info("MainMenuCommand: vocabulary changed, notifying...");
             instance.VocabularyChanged?.Invoke(instance);
         }
+    }
+
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToButton.Clear();
+        var mainMenu = NGame.Instance?.MainMenu;
+        if (mainMenu == null) return [];  // 不在主菜单，静默返回空
+
+        var buttonInfos = new List<string>();
+        foreach (var button in mainMenu.MainMenuButtons)
+        {
+            if (button == null || !button.IsEnabled || !button.IsVisibleInTree())
+                continue;
+
+            var text = GetButtonText(button);
+            if (string.IsNullOrEmpty(text)) continue;
+
+            var normalized = VoiceText.Normalize(text);
+            if (!string.IsNullOrEmpty(normalized))
+            {
+                _wordToButton[normalized] = button;
+                buttonInfos.Add($"'{normalized}'->{button.Name}");
+            }
+        }
+
+        if (buttonInfos.Count > 0)
+            MainFile.Logger.Info($"MainMenuCommand: buttons=[{string.Join(", ", buttonInfos)}]");
+
+        return new HashSet<string>(_wordToButton.Keys, StringComparer.Ordinal);
     }
 
     private static string? GetButtonText(NButton button)

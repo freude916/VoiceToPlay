@@ -10,17 +10,19 @@ internal sealed class VoiceAudioCaptureService : IDisposable
 {
     private const string CaptureBusName = "VoiceToPlayCapture";
     private const string SinkBusName = "VoiceToPlayCaptureSink";
+    private const string PlaybackBusName = "VoiceToPlayPlayback";
 
     /// <summary>
-    ///     是否启用音频播放抑制。设为 false 可调试麦克风回放。
+    ///     是否启用 Jitter Buffer 回放。
     /// </summary>
-    private const bool EnablePlayback = true;
+    private const bool EnablePlayback = false;
 
     private readonly Node _owner;
     private readonly int _targetSampleRate;
     private int _busIndex = -1;
 
     private AudioStreamPlayer? _microphonePlayer;
+    private JitterBufferPlaybackService? _playbackService;
 
     public VoiceAudioCaptureService(Node owner, int targetSampleRate = 16000)
     {
@@ -35,6 +37,11 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     public int FramesAvailable => CaptureEffect?.GetFramesAvailable() ?? 0;
 
     /// <summary>
+    ///     Jitter Buffer 播放服务，用于回放采集的音频。
+    /// </summary>
+    public JitterBufferPlaybackService? PlaybackService => _playbackService;
+
+    /// <summary>
     ///     当前输入设备名称
     /// </summary>
     public string CurrentInputDevice => AudioServer.GetInputDevice();
@@ -44,6 +51,9 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         _microphonePlayer?.Stop();
         if (GodotObject.IsInstanceValid(_microphonePlayer))
             _microphonePlayer.QueueFree();
+
+        _playbackService?.Dispose();
+        _playbackService = null;
 
         // 清理 bus effect
         if (_busIndex >= 0)
@@ -94,6 +104,14 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         // 3. 创建 AudioStreamMicrophone
         RecreateMicrophonePlayer();
 
+        // 4. 创建 Jitter Buffer 播放服务
+        if (EnablePlayback)
+        {
+            EnsurePlaybackBus();
+            _playbackService = new JitterBufferPlaybackService(_owner);
+            _playbackService.Initialize(PlaybackBusName);
+        }
+
         if (CaptureEffect == null)
         {
             error = "Failed to create AudioEffectCapture";
@@ -116,6 +134,7 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     {
         CaptureEffect?.ClearBuffer();
         Resampler.Clear();
+        _playbackService?.Clear();
     }
 
     private int EnsureCaptureBus()
@@ -130,30 +149,41 @@ internal sealed class VoiceAudioCaptureService : IDisposable
 
         AudioServer.SetBusVolumeDb(busIndex, 0f);
 
-        if (!EnablePlayback)
+        // 创建 sink 总线接收音频，防止意外路由到输出
+        // CaptureBus 始终静音，播放由 JitterBufferPlaybackService 处理
+        var sinkBusIndex = AudioServer.GetBusIndex(SinkBusName);
+        if (sinkBusIndex < 0)
         {
-            // 创建 sink 总线接收音频，防止意外路由到输出
-            var sinkBusIndex = AudioServer.GetBusIndex(SinkBusName);
-            if (sinkBusIndex < 0)
-            {
-                AudioServer.AddBus();
-                sinkBusIndex = AudioServer.BusCount - 1;
-                AudioServer.SetBusName(sinkBusIndex, SinkBusName);
-            }
-
-            AudioServer.SetBusMute(sinkBusIndex, true);
-            AudioServer.SetBusVolumeDb(sinkBusIndex, 0f);
-
-            // 静音捕获总线并路由到 sink
-            AudioServer.SetBusMute(busIndex, true);
-            var currentSend = AudioServer.GetBusSend(busIndex).ToString();
-            if (!string.Equals(currentSend, SinkBusName, StringComparison.Ordinal))
-                AudioServer.SetBusSend(busIndex, SinkBusName);
+            AudioServer.AddBus();
+            sinkBusIndex = AudioServer.BusCount - 1;
+            AudioServer.SetBusName(sinkBusIndex, SinkBusName);
         }
 
-        AudioServer.SetBusMute(busIndex, false);
+        AudioServer.SetBusMute(sinkBusIndex, true);
+        AudioServer.SetBusVolumeDb(sinkBusIndex, 0f);
+
+        // 静音捕获总线并路由到 sink
+        AudioServer.SetBusMute(busIndex, true);
+        var currentSend = AudioServer.GetBusSend(busIndex).ToString();
+        if (!string.Equals(currentSend, SinkBusName, StringComparison.Ordinal))
+            AudioServer.SetBusSend(busIndex, SinkBusName);
 
         return busIndex;
+    }
+
+    private static void EnsurePlaybackBus()
+    {
+        var busIndex = AudioServer.GetBusIndex(PlaybackBusName);
+        if (busIndex < 0)
+        {
+            AudioServer.AddBus();
+            busIndex = AudioServer.BusCount - 1;
+            AudioServer.SetBusName(busIndex, PlaybackBusName);
+        }
+
+        AudioServer.SetBusVolumeDb(busIndex, 0f);
+        AudioServer.SetBusMute(busIndex, false);
+        // 默认发送到 Master
     }
 
     private static AudioEffectCapture? GetOrCreateCaptureEffect(int busIndex)

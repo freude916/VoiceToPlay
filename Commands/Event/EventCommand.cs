@@ -16,7 +16,11 @@ public sealed class EventCommand : IVoiceCommand
     };
 
     private readonly Dictionary<string, int> _wordToIndex = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public EventCommand()
     {
@@ -25,7 +29,10 @@ public sealed class EventCommand : IVoiceCommand
 
     public static EventCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords => GetSupportedWords();
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -75,7 +82,26 @@ public sealed class EventCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
-    private IEnumerable<string> GetSupportedWords()
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
+    public static void RefreshVocabulary()
+    {
+        var instance = Instance;
+        if (instance == null) return;
+
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
+        {
+            instance._cachedWords = newWords;
+            instance.VocabularyChanged?.Invoke(instance);
+        }
+    }
+
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
     {
         _wordToIndex.Clear();
 
@@ -91,7 +117,7 @@ public sealed class EventCommand : IVoiceCommand
 
         if (buttons.Count == 0) return [];
 
-        MainFile.Logger.Info($"EventCommand.GetSupportedWords: {buttons.Count} enabled buttons");
+        MainFile.Logger.Info($"EventCommand.ComputeSupportedWords: {buttons.Count} enabled buttons");
 
         for (var i = 0; i < buttons.Count && i < 9; i++)
         {
@@ -107,19 +133,6 @@ public sealed class EventCommand : IVoiceCommand
         // "继续" 作为第一个选项的别名
         _wordToIndex["继续"] = 0;
 
-        return _wordToIndex.Keys;
-    }
-
-    public static void RefreshVocabulary()
-    {
-        var instance = Instance;
-        if (instance == null) return;
-
-        var currentWords = new HashSet<string>(instance.GetSupportedWords(), StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
-        {
-            instance._lastWords = currentWords;
-            instance.VocabularyChanged?.Invoke(instance);
-        }
+        return new HashSet<string>(_wordToIndex.Keys, StringComparer.Ordinal);
     }
 }

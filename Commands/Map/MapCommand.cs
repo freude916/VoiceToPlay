@@ -18,7 +18,11 @@ public sealed class MapCommand : IVoiceCommand
     };
 
     private readonly Dictionary<string, int> _wordToIndex = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public MapCommand()
     {
@@ -27,7 +31,10 @@ public sealed class MapCommand : IVoiceCommand
 
     public static MapCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords => GetSupportedWords(NMapScreen.Instance);
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -66,44 +73,61 @@ public sealed class MapCommand : IVoiceCommand
     public event Action<IVoiceCommand>? VocabularyChanged;
 
     /// <summary>
-    ///     获取支持的词汇，可传入指定的 mapScreen 避免依赖 NMapScreen.Instance
+    ///     刷新词表缓存，由 Patch 调用
     /// </summary>
-    private IEnumerable<string> GetSupportedWords(NMapScreen? mapScreen)
+    public static void RefreshVocabulary()
+    {
+        var instance = Instance;
+        if (instance == null) return;
+
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
+        {
+            instance._cachedWords = newWords;
+            instance.VocabularyChanged?.Invoke(instance);
+        }
+    }
+
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
     {
         _wordToIndex.Clear();
 
+        var mapScreen = NMapScreen.Instance;
         if (mapScreen == null)
         {
-            MainFile.Logger.Info("MapCommand.GetSupportedWords: mapScreen is null");
+            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: mapScreen is null");
             return [];
         }
 
         if (!mapScreen.IsOpen)
         {
-            MainFile.Logger.Info("MapCommand.GetSupportedWords: mapScreen.IsOpen is false");
+            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: mapScreen.IsOpen is false");
             return [];
         }
 
         if (!mapScreen.IsTravelEnabled)
         {
-            MainFile.Logger.Info("MapCommand.GetSupportedWords: IsTravelEnabled is false");
+            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: IsTravelEnabled is false");
             return [];
         }
 
         if (mapScreen.IsTraveling)
         {
-            MainFile.Logger.Info("MapCommand.GetSupportedWords: IsTraveling is true");
+            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: IsTraveling is true");
             return [];
         }
 
         var coords = GetTravelableCoords();
         if (coords.Count == 0)
         {
-            MainFile.Logger.Info("MapCommand.GetSupportedWords: no travelable coords");
+            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: no travelable coords");
             return [];
         }
 
-        MainFile.Logger.Info($"MapCommand.GetSupportedWords: {coords.Count} travelable coords");
+        MainFile.Logger.Info($"MapCommand.ComputeSupportedWords: {coords.Count} travelable coords");
 
         // 方位词
         _wordToIndex["左边"] = 0;
@@ -126,20 +150,7 @@ public sealed class MapCommand : IVoiceCommand
             _wordToIndex[$"第{oneBased}"] = i;
         }
 
-        return _wordToIndex.Keys;
-    }
-
-    public static void RefreshVocabulary(NMapScreen? mapScreen = null)
-    {
-        var instance = Instance;
-        if (instance == null) return;
-
-        var currentWords = new HashSet<string>(instance.GetSupportedWords(mapScreen), StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
-        {
-            instance._lastWords = currentWords;
-            instance.VocabularyChanged?.Invoke(instance);
-        }
+        return new HashSet<string>(_wordToIndex.Keys, StringComparer.Ordinal);
     }
 
     private static IReadOnlyList<MapCoord> GetTravelableCoords()
