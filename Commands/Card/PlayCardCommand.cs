@@ -38,6 +38,10 @@ public sealed class PlayCardCommand : IVoiceCommand
 
     public void Execute(string word)
     {
+        // 防御性检查：overlay 打开或手牌选牌模式时忽略
+        if (NOverlayStack.Instance?.Peek() != null) return;
+        if (NPlayerHand.Instance?.IsInCardSelection == true) return;
+
         if (!_wordToCard.TryGetValue(word, out var info))
         {
             MainFile.Logger.Warn($"PlayCardCommand: word '{word}' not found");

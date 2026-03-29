@@ -6,11 +6,11 @@ using VoiceToPlay.Commands.Combat;
 using VoiceToPlay.Commands.Event;
 using VoiceToPlay.Commands.MainMenu;
 using VoiceToPlay.Commands.Map;
-using VoiceToPlay.Commands.Proceed;
 using VoiceToPlay.Commands.RestSite;
 using VoiceToPlay.Commands.Rewards;
 using VoiceToPlay.Commands.Treasure;
 using VoiceToPlay.Commands.Turn;
+using VoiceToPlay.Commands.Ui;
 using VoiceToPlay.Voice.Core;
 using VoiceToPlay.Voice.UI;
 
@@ -43,6 +43,7 @@ internal sealed partial class VoiceEntryNode : Node
         _commandEngine.Register(new EndTurnCommand());
         _commandEngine.Register(new ProceedCommand());
         _commandEngine.Register(new ConfirmCommand());
+        _commandEngine.Register(new BackCommand());
         _commandEngine.Register(new RewardsCommand());
         _commandEngine.Register(new MapCommand());
         _commandEngine.Register(new CardRowSelectCommand());
@@ -111,9 +112,9 @@ internal sealed partial class VoiceEntryNode : Node
         AddChild(_debugPanel);
     }
 
-    private void OnAudioEffectsChanged(float highPassHz, float gainDb)
+    private void OnAudioEffectsChanged(float highPassHz, float lowPassHz, float gainDb)
     {
-        _recognitionService?.SetAudioEffects(highPassHz, gainDb);
+        _recognitionService?.SetAudioEffects(highPassHz, lowPassHz, gainDb);
     }
 
     private void OnRecognitionTextChanged(string text)
@@ -128,9 +129,12 @@ internal sealed partial class VoiceEntryNode : Node
         _debugPanel.SetListening(_listening, _hasError);
 
         if (_recognitionService != null)
+        {
             _debugPanel.SetAudioStats(
                 _recognitionService.LastPeakAmplitude,
                 VoiceRecognitionService.CurrentInputDevice);
+            _debugPanel.SetSpectrumData(_recognitionService.GetSpectrumData());
+        }
     }
 
     public void DisposeServiceAndQueueFree()

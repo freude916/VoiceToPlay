@@ -15,7 +15,7 @@ namespace VoiceToPlay.Voice;
 internal sealed class VoiceRecognitionService : IDisposable
 {
     // 调试开关：记录 Vosk 的 partial 和 final 结果
-    private const bool DebugRecognition = true;
+    private const bool DebugRecognition = false;
 
     // Partial 超时：静音超过此时间后清空误识别的 partial
     private const float PartialTimeoutSeconds = 1.5f;
@@ -81,12 +81,47 @@ internal sealed class VoiceRecognitionService : IDisposable
     /// <summary>
     ///     设置音频效果参数
     /// </summary>
-    /// <param name="highPassCutoffHz">高通滤波器截止频率 (Hz)</param>
-    /// <param name="gainDb">增益 (dB)</param>
-    public void SetAudioEffects(float highPassCutoffHz, float gainDb)
+    public void SetAudioEffects(float highPassCutoffHz, float lowPassCutoffHz, float gainDb)
     {
         _audioCapture.SetHighPassCutoff(highPassCutoffHz);
+        _audioCapture.SetLowPassCutoff(lowPassCutoffHz);
         _audioCapture.SetGainDb(gainDb);
+    }
+
+    /// <summary>
+    ///     获取频谱数据 (用于调试可视化)
+    /// </summary>
+    /// <param name="bands">频带数量</param>
+    /// <returns>频谱幅度数组</returns>
+    public float[]? GetSpectrumData(int bands = 32)
+    {
+        var busIndex = _audioCapture.BusIndex;
+        if (busIndex < 0) return null;
+
+        var instance = AudioServer.GetBusEffectInstance(busIndex, 3);
+        if (instance is not AudioEffectSpectrumAnalyzerInstance spectrumInstance)
+            return null;
+
+        // 对数频率采样：20Hz - 8000Hz
+        var result = new float[bands];
+        var minFreq = 20f;
+        var maxFreq = 8000f;
+        var logMin = MathF.Log(minFreq);
+        var logMax = MathF.Log(maxFreq);
+        var logStep = (logMax - logMin) / bands;
+
+        for (var i = 0; i < bands; i++)
+        {
+            var fromHz = MathF.Exp(logMin + i * logStep);
+            var toHz = MathF.Exp(logMin + (i + 1) * logStep);
+            var magnitude = spectrumInstance.GetMagnitudeForFrequencyRange(
+                fromHz, toHz,
+                AudioEffectSpectrumAnalyzerInstance.MagnitudeMode.Max);
+            // 取左右声道最大值
+            result[i] = MathF.Max(magnitude.X, magnitude.Y);
+        }
+
+        return result;
     }
 
     public void Dispose()

@@ -18,7 +18,7 @@ public sealed class VoiceCommandEngine
     /// <summary>
     ///     词 → 命令列表（一个词可能对应多个命令）
     /// </summary>
-    private readonly Dictionary<string, List<IVoiceCommand>> _wordToCommands = new();
+    private readonly Dictionary<string, List<IVoiceCommand>> _wordToCommands = [];
 
     /// <summary>
     ///     词表变化事件（供外部订阅，如 Vosk 服务）

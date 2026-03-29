@@ -1,7 +1,7 @@
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 
-namespace VoiceToPlay.Commands.Proceed.Patches;
+namespace VoiceToPlay.Commands.Ui.Patches;
 
 /// <summary>
 ///     NConfirmButton 生命周期补丁：管理"确定/确认"词表
@@ -9,10 +9,9 @@ namespace VoiceToPlay.Commands.Proceed.Patches;
 [HarmonyPatch(typeof(NConfirmButton), "OnEnable")]
 internal static class NConfirmButtonEnablePatch
 {
-    private static void Postfix()
+    private static void Postfix(NConfirmButton __instance)
     {
-        MainFile.Logger.Info("NConfirmButton.OnEnable, refreshing vocabulary");
-        ConfirmCommand.RefreshVocabulary();
+        ConfirmCommand.RegisterButton(__instance);
     }
 }
 
@@ -21,7 +20,6 @@ internal static class NConfirmButtonDisablePatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NConfirmButton.OnDisable, clearing vocabulary");
-        ConfirmCommand.RefreshVocabulary();
+        ConfirmCommand.UnregisterButton();
     }
 }

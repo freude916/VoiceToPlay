@@ -132,6 +132,7 @@
         <Content Include="jieba\Resources\prob_emit.json" />
         <Content Include="jieba\Resources\prob_trans.json" />
         <Content Include="jieba\Resources\stopwords.txt" />
+        <Content Include="Plan.md" />
         <Content Include="Voice\ARCHITECTURE.md"/>
         <Content Include="Voice\SNIPPETS.md"/>
     </ItemGroup>
