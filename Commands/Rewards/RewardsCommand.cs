@@ -21,7 +21,11 @@ public sealed class RewardsCommand : IVoiceCommand
     };
 
     private readonly Dictionary<string, Func<bool>> _wordToAction = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public RewardsCommand()
     {
@@ -30,73 +34,10 @@ public sealed class RewardsCommand : IVoiceCommand
 
     public static RewardsCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToAction.Clear();
-
-            if (NOverlayStack.Instance?.Peek() is not NRewardsScreen rewardsScreen || rewardsScreen.IsComplete) return [];
-
-            var cardRewardIndex = 0;
-
-            // 遍历奖励按钮
-            foreach (var button in EnumerateRewardButtons(rewardsScreen))
-            {
-                if (button.Reward == null) continue;
-
-                var reward = button.Reward;
-                var capturedButton = button;
-
-                // CardReward 需要序号
-                if (reward is CardReward)
-                {
-                    cardRewardIndex++;
-                    var word = $"卡牌{ChineseNumbers.GetValueOrDefault(cardRewardIndex, cardRewardIndex.ToString())}";
-                    _wordToAction[word] = () =>
-                    {
-                        if (!GodotObject.IsInstanceValid(capturedButton)) return false;
-                        capturedButton.ForceClick();
-                        return true;
-
-                    };
-
-                    if (cardRewardIndex == 1)
-                    {
-                        // first card with alias
-                        var word0 = "卡牌";
-                        _wordToAction[word0] = () =>
-                        {
-                            if (!GodotObject.IsInstanceValid(capturedButton)) return false;
-                            capturedButton.ForceClick();
-                            return true;
-                        };
-                    }
-                    
-                    continue;
-                }
-
-                var rewardWord = GetRewardWord(reward);
-                if (string.IsNullOrEmpty(rewardWord)) continue;
-
-                _wordToAction[rewardWord] = () =>
-                {
-                    if (GodotObject.IsInstanceValid(capturedButton))
-                    {
-                        capturedButton.ForceClick();
-                        return true;
-                    }
-
-                    return false;
-                };
-            }
-
-            // 添加静态命令
-            _wordToAction["金币"] = () => ClaimAllGold(rewardsScreen);
-
-            return _wordToAction.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -112,15 +53,88 @@ public sealed class RewardsCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToAction.Clear();
+
+        if (NOverlayStack.Instance?.Peek() is not NRewardsScreen rewardsScreen || rewardsScreen.IsComplete) return [];
+
+        var cardRewardIndex = 0;
+
+        // 遍历奖励按钮
+        foreach (var button in EnumerateRewardButtons(rewardsScreen))
+        {
+            if (button.Reward == null) continue;
+
+            var reward = button.Reward;
+            var capturedButton = button;
+
+            // CardReward 需要序号
+            if (reward is CardReward)
+            {
+                cardRewardIndex++;
+                var word = $"卡牌{ChineseNumbers.GetValueOrDefault(cardRewardIndex, cardRewardIndex.ToString())}";
+                _wordToAction[word] = () =>
+                {
+                    if (!GodotObject.IsInstanceValid(capturedButton)) return false;
+                    capturedButton.ForceClick();
+                    return true;
+
+                };
+
+                if (cardRewardIndex == 1)
+                {
+                    // first card with alias
+                    var word0 = "卡牌";
+                    _wordToAction[word0] = () =>
+                    {
+                        if (!GodotObject.IsInstanceValid(capturedButton)) return false;
+                        capturedButton.ForceClick();
+                        return true;
+                    };
+                }
+                
+                continue;
+            }
+
+            var rewardWord = GetRewardWord(reward);
+            if (string.IsNullOrEmpty(rewardWord)) continue;
+
+            _wordToAction[rewardWord] = () =>
+            {
+                if (GodotObject.IsInstanceValid(capturedButton))
+                {
+                    capturedButton.ForceClick();
+                    return true;
+                }
+
+                return false;
+            };
+        }
+
+        // 添加静态命令
+        _wordToAction["金币"] = () => ClaimAllGold(rewardsScreen);
+
+        return new HashSet<string>(_wordToAction.Keys, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
     public static void RefreshVocabulary(bool force = false)
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords, StringComparer.Ordinal);
-        if (!force && currentWords.SetEquals(instance._lastWords)) return;
-        instance._lastWords = currentWords;
-        instance.VocabularyChanged?.Invoke(instance);
+        var newWords = instance.ComputeSupportedWords();
+        if (force || !newWords.SetEquals(instance._cachedWords))
+        {
+            instance._cachedWords = newWords;
+            instance.VocabularyChanged?.Invoke(instance);
+        }
     }
 
     private static string GetRewardWord(Reward reward)

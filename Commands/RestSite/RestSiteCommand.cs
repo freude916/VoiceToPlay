@@ -12,7 +12,11 @@ namespace VoiceToPlay.Commands.RestSite;
 public sealed class RestSiteCommand : IVoiceCommand
 {
     private readonly Dictionary<string, NRestSiteButton> _wordToButton = new();
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public RestSiteCommand()
     {
@@ -21,38 +25,10 @@ public sealed class RestSiteCommand : IVoiceCommand
 
     public static RestSiteCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToButton.Clear();
-
-            var restSiteRoom = NRestSiteRoom.Instance;
-            if (restSiteRoom == null) return [];
-
-            var choicesContainer = restSiteRoom.GetNodeOrNull<Control>("%ChoicesContainer");
-            if (choicesContainer == null) return [];
-
-            foreach (var child in choicesContainer.GetChildren())
-            {
-                if (child is not NRestSiteButton button) continue;
-                if (!GodotObject.IsInstanceValid(button) || !button.IsInsideTree() || !button.IsEnabled)
-                    continue;
-
-                var option = button.Option;
-                if (option == null) continue;
-
-                var title = option.Title?.GetFormattedText();
-                if (string.IsNullOrEmpty(title)) continue;
-
-                var normalizedTitle = VoiceText.Normalize(title);
-                if (!string.IsNullOrEmpty(normalizedTitle))
-                    _wordToButton[normalizedTitle] = button;
-            }
-
-            return _wordToButton.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -74,15 +50,51 @@ public sealed class RestSiteCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToButton.Clear();
+
+        var restSiteRoom = NRestSiteRoom.Instance;
+        if (restSiteRoom == null) return [];
+
+        var choicesContainer = restSiteRoom.GetNodeOrNull<Control>("%ChoicesContainer");
+        if (choicesContainer == null) return [];
+
+        foreach (var child in choicesContainer.GetChildren())
+        {
+            if (child is not NRestSiteButton button) continue;
+            if (!GodotObject.IsInstanceValid(button) || !button.IsInsideTree() || !button.IsEnabled)
+                continue;
+
+            var option = button.Option;
+            if (option == null) continue;
+
+            var title = option.Title?.GetFormattedText();
+            if (string.IsNullOrEmpty(title)) continue;
+
+            var normalizedTitle = VoiceText.Normalize(title);
+            if (!string.IsNullOrEmpty(normalizedTitle))
+                _wordToButton[normalizedTitle] = button;
+        }
+
+        return new HashSet<string>(_wordToButton.Keys, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
     public static void RefreshVocabulary()
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords, StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
         {
-            instance._lastWords = currentWords;
+            instance._cachedWords = newWords;
             instance.VocabularyChanged?.Invoke(instance);
         }
     }
@@ -93,9 +105,9 @@ public sealed class RestSiteCommand : IVoiceCommand
         if (instance == null) return;
 
         instance._wordToButton.Clear();
-        if (instance._lastWords.Count > 0)
+        if (instance._cachedWords.Count > 0)
         {
-            instance._lastWords = new HashSet<string>(StringComparer.Ordinal);
+            instance._cachedWords = new HashSet<string>(StringComparer.Ordinal);
             instance.VocabularyChanged?.Invoke(instance);
         }
     }

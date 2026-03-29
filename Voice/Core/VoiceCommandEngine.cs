@@ -54,10 +54,9 @@ public sealed class VoiceCommandEngine
     /// </summary>
     private void OnCommandVocabularyChanged(IVoiceCommand cmd)
     {
-        MainFile.Logger.Info($"VoiceCommandEngine: received VocabularyChanged from {cmd.GetType().Name}");
         RebuildWordToCommandsMap();
         var words = GetAllWords();
-        MainFile.Logger.Info($"VoiceCommandEngine: invoking VocabularyUpdated with {words.Count} words");
+        MainFile.Logger.Info($"VoiceCommandEngine: received VocabularyChanged from {cmd.GetType().Name}, now {words.Count} words");
         VocabularyUpdated?.Invoke(words);
     }
 

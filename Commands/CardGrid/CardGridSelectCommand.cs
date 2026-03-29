@@ -26,7 +26,11 @@ public sealed class CardGridSelectCommand : IVoiceCommand
 
     private readonly Dictionary<string, object> _wordToTarget = new(); // NGridCardHolder 或 "scroll_up" / "scroll_down"
     private NCardGrid? _lastCardGrid;
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public CardGridSelectCommand()
     {
@@ -35,85 +39,10 @@ public sealed class CardGridSelectCommand : IVoiceCommand
 
     public static CardGridSelectCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToTarget.Clear();
-            _lastCardGrid = null;
-
-            var screen = NOverlayStack.Instance?.Peek() as NCardGridSelectionScreen;
-            if (screen == null) return [];
-
-            var cardGrid = screen.GetNodeOrNull<NCardGrid>("%CardGrid");
-            if (cardGrid == null) return [];
-
-            _lastCardGrid = cardGrid;
-
-            var holders = cardGrid.CurrentlyDisplayedCardHolders;
-            var cardNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-            var holdersByName = new Dictionary<string, List<NGridCardHolder>>(StringComparer.Ordinal);
-
-            // 统计卡牌名
-            foreach (var holder in holders)
-            {
-                if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
-                    continue;
-
-                var cardModel = holder.CardModel;
-                if (cardModel == null) continue;
-
-                var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
-                if (string.IsNullOrEmpty(cardName)) continue;
-
-                if (!holdersByName.TryGetValue(cardName, out var list))
-                    holdersByName[cardName] = list = [];
-                list.Add(holder);
-
-                cardNameCounts.TryGetValue(cardName, out var count);
-                cardNameCounts[cardName] = count + 1;
-            }
-
-            // 生成词表
-            var index = 0;
-            foreach (var holder in holders)
-            {
-                if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
-                    continue;
-
-                var cardModel = holder.CardModel;
-                if (cardModel == null) continue;
-
-                var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
-                if (string.IsNullOrEmpty(cardName)) continue;
-
-                index++;
-
-                // 序号词
-                var indexWord = $"第{ChineseNumbers.GetValueOrDefault(index, index.ToString())}张";
-                _wordToTarget[indexWord] = holder;
-
-                // 卡牌名（重复时加序号）
-                if (cardNameCounts.GetValueOrDefault(cardName) > 1)
-                {
-                    var namedWord = $"{cardName}{ChineseNumbers.GetValueOrDefault(index, index.ToString())}";
-                    _wordToTarget[namedWord] = holder;
-                }
-                else
-                {
-                    _wordToTarget[cardName] = holder;
-                }
-            }
-
-            // 滚动词
-            foreach (var word in ScrollUpWords)
-                _wordToTarget[word] = "scroll_up";
-            foreach (var word in ScrollDownWords)
-                _wordToTarget[word] = "scroll_down";
-
-            return _wordToTarget.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -174,15 +103,98 @@ public sealed class CardGridSelectCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToTarget.Clear();
+        _lastCardGrid = null;
+
+        var screen = NOverlayStack.Instance?.Peek() as NCardGridSelectionScreen;
+        if (screen == null) return [];
+
+        var cardGrid = screen.GetNodeOrNull<NCardGrid>("%CardGrid");
+        if (cardGrid == null) return [];
+
+        _lastCardGrid = cardGrid;
+
+        var holders = cardGrid.CurrentlyDisplayedCardHolders;
+        var cardNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        var holdersByName = new Dictionary<string, List<NGridCardHolder>>(StringComparer.Ordinal);
+
+        // 统计卡牌名
+        foreach (var holder in holders)
+        {
+            if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
+                continue;
+
+            var cardModel = holder.CardModel;
+            if (cardModel == null) continue;
+
+            var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
+            if (string.IsNullOrEmpty(cardName)) continue;
+
+            if (!holdersByName.TryGetValue(cardName, out var list))
+                holdersByName[cardName] = list = [];
+            list.Add(holder);
+
+            cardNameCounts.TryGetValue(cardName, out var count);
+            cardNameCounts[cardName] = count + 1;
+        }
+
+        // 生成词表
+        var index = 0;
+        foreach (var holder in holders)
+        {
+            if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
+                continue;
+
+            var cardModel = holder.CardModel;
+            if (cardModel == null) continue;
+
+            var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
+            if (string.IsNullOrEmpty(cardName)) continue;
+
+            index++;
+
+            // 序号词
+            var indexWord = $"第{ChineseNumbers.GetValueOrDefault(index, index.ToString())}张";
+            _wordToTarget[indexWord] = holder;
+
+            // 卡牌名（重复时加序号）
+            if (cardNameCounts.GetValueOrDefault(cardName) > 1)
+            {
+                var namedWord = $"{cardName}{ChineseNumbers.GetValueOrDefault(index, index.ToString())}";
+                _wordToTarget[namedWord] = holder;
+            }
+            else
+            {
+                _wordToTarget[cardName] = holder;
+            }
+        }
+
+        // 滚动词
+        foreach (var word in ScrollUpWords)
+            _wordToTarget[word] = "scroll_up";
+        foreach (var word in ScrollDownWords)
+            _wordToTarget[word] = "scroll_down";
+
+        return new HashSet<string>(_wordToTarget.Keys, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
     public static void RefreshVocabulary()
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords, StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
         {
-            instance._lastWords = currentWords;
+            instance._cachedWords = newWords;
             instance.VocabularyChanged?.Invoke(instance);
         }
     }
@@ -194,9 +206,9 @@ public sealed class CardGridSelectCommand : IVoiceCommand
 
         instance._wordToTarget.Clear();
         instance._lastCardGrid = null;
-        if (instance._lastWords.Count > 0)
+        if (instance._cachedWords.Count > 0)
         {
-            instance._lastWords = new HashSet<string>(StringComparer.Ordinal);
+            instance._cachedWords = new HashSet<string>(StringComparer.Ordinal);
             instance.VocabularyChanged?.Invoke(instance);
         }
     }

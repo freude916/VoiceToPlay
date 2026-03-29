@@ -20,7 +20,11 @@ public sealed class CardRowSelectCommand : IVoiceCommand
     };
 
     private readonly Dictionary<string, object> _wordToTarget = new(); // NGridCardHolder 或 NCardRewardAlternativeButton
-    private HashSet<string> _lastWords = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
+    /// </summary>
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public CardRowSelectCommand()
     {
@@ -29,101 +33,10 @@ public sealed class CardRowSelectCommand : IVoiceCommand
 
     public static CardRowSelectCommand? Instance { get; private set; }
 
-    public IEnumerable<string> SupportedWords
-    {
-        get
-        {
-            _wordToTarget.Clear();
-
-            // 支持 NCardRewardSelectionScreen 和 NChooseACardSelectionScreen
-            var screen = NOverlayStack.Instance?.Peek();
-            Control? cardRow = null;
-            Control? alternativesContainer = null;
-            NButton? skipButton = null;
-
-            if (screen is NCardRewardSelectionScreen rewardScreen)
-            {
-                cardRow = rewardScreen.GetNodeOrNull<Control>("UI/CardRow");
-                alternativesContainer = rewardScreen.GetNodeOrNull<Control>("UI/RewardAlternatives");
-            }
-            else if (screen is NChooseACardSelectionScreen chooseScreen)
-            {
-                cardRow = chooseScreen.GetNodeOrNull<Control>("CardRow");
-                // NChooseACardSelectionScreen 的跳过按钮
-                skipButton = chooseScreen.GetNodeOrNull<NButton>("SkipButton");
-            }
-
-            if (cardRow == null) return [];
-
-            var index = 0;
-            var cardNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-
-            // 第一遍：统计每个卡牌名出现的次数
-            foreach (var child in cardRow.GetChildren())
-            {
-                if (child is not NGridCardHolder holder) continue;
-                var model = holder.CardNode?.Model;
-                if (model == null) continue;
-
-                var cardName = VoiceText.Normalize(model.TitleLocString.GetFormattedText());
-                if (string.IsNullOrEmpty(cardName)) continue;
-
-                cardNameCounts.TryGetValue(cardName, out var count);
-                cardNameCounts[cardName] = count + 1;
-            }
-
-            // 第二遍：生成词汇
-            foreach (var child in cardRow.GetChildren())
-            {
-                if (child is not NGridCardHolder holder) continue;
-                index++;
-
-                var model = holder.CardNode?.Model;
-                if (model == null) continue;
-
-                var cardName = VoiceText.Normalize(model.TitleLocString.GetFormattedText());
-                if (string.IsNullOrEmpty(cardName)) continue;
-
-                // 序号词（第一张、第二张...）
-                var indexWord = $"第{ChineseNumbers.GetValueOrDefault(index, index.ToString())}张";
-                _wordToTarget[indexWord] = holder;
-
-                // 卡牌名：如果有重复，加序号；否则不加
-                if (cardNameCounts.GetValueOrDefault(cardName) > 1)
-                {
-                    var namedWord = $"{cardName}{ChineseNumbers.GetValueOrDefault(index, index.ToString())}";
-                    _wordToTarget[namedWord] = holder;
-                }
-                else
-                {
-                    _wordToTarget[cardName] = holder;
-                }
-            }
-
-            // 备选按钮（默认有跳过，献祭卡牌等由遗物或其他来源添加，仅 NCardRewardSelectionScreen）
-            if (alternativesContainer != null)
-            {
-                foreach (var child in alternativesContainer.GetChildren())
-                {
-                    if (child is not NCardRewardAlternativeButton button) continue;
-                    var buttonText = button.GetNodeOrNull<Label>("Label")?.Text;
-                    if (string.IsNullOrEmpty(buttonText)) continue;
-
-                    var normalizedText = VoiceText.Normalize(buttonText);
-                    if (!string.IsNullOrEmpty(normalizedText))
-                        _wordToTarget[normalizedText] = button;
-                }
-            }
-
-            // NChooseACardSelectionScreen 的跳过按钮
-            if (skipButton != null && skipButton.IsEnabled)
-            {
-                _wordToTarget["跳过"] = skipButton;
-            }
-
-            return _wordToTarget.Keys;
-        }
-    }
+    /// <summary>
+    ///     只返回缓存，不做任何计算
+    /// </summary>
+    public IEnumerable<string> SupportedWords => _cachedWords;
 
     public void Execute(string word)
     {
@@ -165,15 +78,114 @@ public sealed class CardRowSelectCommand : IVoiceCommand
 
     public event Action<IVoiceCommand>? VocabularyChanged;
 
+    /// <summary>
+    ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
+    /// </summary>
+    private HashSet<string> ComputeSupportedWords()
+    {
+        _wordToTarget.Clear();
+
+        // 支持 NCardRewardSelectionScreen 和 NChooseACardSelectionScreen
+        var screen = NOverlayStack.Instance?.Peek();
+        Control? cardRow = null;
+        Control? alternativesContainer = null;
+        NButton? skipButton = null;
+
+        if (screen is NCardRewardSelectionScreen rewardScreen)
+        {
+            cardRow = rewardScreen.GetNodeOrNull<Control>("UI/CardRow");
+            alternativesContainer = rewardScreen.GetNodeOrNull<Control>("UI/RewardAlternatives");
+        }
+        else if (screen is NChooseACardSelectionScreen chooseScreen)
+        {
+            cardRow = chooseScreen.GetNodeOrNull<Control>("CardRow");
+            // NChooseACardSelectionScreen 的跳过按钮
+            skipButton = chooseScreen.GetNodeOrNull<NButton>("SkipButton");
+        }
+
+        if (cardRow == null) return [];
+
+        var index = 0;
+        var cardNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+
+        // 第一遍：统计每个卡牌名出现的次数
+        foreach (var child in cardRow.GetChildren())
+        {
+            if (child is not NGridCardHolder holder) continue;
+            var model = holder.CardNode?.Model;
+            if (model == null) continue;
+
+            var cardName = VoiceText.Normalize(model.TitleLocString.GetFormattedText());
+            if (string.IsNullOrEmpty(cardName)) continue;
+
+            cardNameCounts.TryGetValue(cardName, out var count);
+            cardNameCounts[cardName] = count + 1;
+        }
+
+        // 第二遍：生成词汇
+        foreach (var child in cardRow.GetChildren())
+        {
+            if (child is not NGridCardHolder holder) continue;
+            index++;
+
+            var model = holder.CardNode?.Model;
+            if (model == null) continue;
+
+            var cardName = VoiceText.Normalize(model.TitleLocString.GetFormattedText());
+            if (string.IsNullOrEmpty(cardName)) continue;
+
+            // 序号词（第一张、第二张...）
+            var indexWord = $"第{ChineseNumbers.GetValueOrDefault(index, index.ToString())}张";
+            _wordToTarget[indexWord] = holder;
+
+            // 卡牌名：如果有重复，加序号；否则不加
+            if (cardNameCounts.GetValueOrDefault(cardName) > 1)
+            {
+                var namedWord = $"{cardName}{ChineseNumbers.GetValueOrDefault(index, index.ToString())}";
+                _wordToTarget[namedWord] = holder;
+            }
+            else
+            {
+                _wordToTarget[cardName] = holder;
+            }
+        }
+
+        // 备选按钮（默认有跳过，献祭卡牌等由遗物或其他来源添加，仅 NCardRewardSelectionScreen）
+        if (alternativesContainer != null)
+        {
+            foreach (var child in alternativesContainer.GetChildren())
+            {
+                if (child is not NCardRewardAlternativeButton button) continue;
+                var buttonText = button.GetNodeOrNull<Label>("Label")?.Text;
+                if (string.IsNullOrEmpty(buttonText)) continue;
+
+                var normalizedText = VoiceText.Normalize(buttonText);
+                if (!string.IsNullOrEmpty(normalizedText))
+                    _wordToTarget[normalizedText] = button;
+            }
+        }
+
+        // NChooseACardSelectionScreen 的跳过按钮
+        if (skipButton != null && skipButton.IsEnabled)
+        {
+            _wordToTarget["跳过"] = skipButton;
+        }
+
+        return new HashSet<string>(_wordToTarget.Keys, StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    ///     刷新词表缓存，由 Patch 调用
+    /// </summary>
     public static void RefreshVocabulary()
     {
         var instance = Instance;
         if (instance == null) return;
 
-        var currentWords = new HashSet<string>(instance.SupportedWords, StringComparer.Ordinal);
-        if (!currentWords.SetEquals(instance._lastWords))
+        var newWords = instance.ComputeSupportedWords();
+        if (!newWords.SetEquals(instance._cachedWords))
         {
-            instance._lastWords = currentWords;
+            instance._cachedWords = newWords;
             instance.VocabularyChanged?.Invoke(instance);
         }
     }
@@ -187,9 +199,9 @@ public sealed class CardRowSelectCommand : IVoiceCommand
         if (instance == null) return;
 
         instance._wordToTarget.Clear();
-        if (instance._lastWords.Count > 0)
+        if (instance._cachedWords.Count > 0)
         {
-            instance._lastWords = new HashSet<string>(StringComparer.Ordinal);
+            instance._cachedWords = new HashSet<string>(StringComparer.Ordinal);
             instance.VocabularyChanged?.Invoke(instance);
         }
     }
