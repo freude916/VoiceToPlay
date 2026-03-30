@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Godot;
 
 namespace VoiceToPlay.Voice.UI;
@@ -5,11 +7,14 @@ namespace VoiceToPlay.Voice.UI;
 /// <summary>
 ///     语音调试面板。支持折叠的音频控制面板。
 /// </summary>
+[SuppressMessage("Usage", "CA2213:应释放可释放的字段")]
 public sealed partial class VoiceDebugPanel : PanelContainer
 {
     private const float PanelWidth = 300f;
     private const float MarginRight = 50f;
     private const float MarginTop = 50f;
+
+
     private VBoxContainer? _collapsibleContent;
 
     // 状态数据
@@ -201,7 +206,7 @@ public sealed partial class VoiceDebugPanel : PanelContainer
         _lowPassSlider!.ValueChanged += OnSliderChanged;
     }
 
-    private HBoxContainer CreateSliderRow(string label, double min, double max, double step, double defaultValue,
+    private static HBoxContainer CreateSliderRow(string label, double min, double max, double step, double defaultValue,
         out HSlider slider, out Label valueLabel)
     {
         var row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
@@ -229,7 +234,7 @@ public sealed partial class VoiceDebugPanel : PanelContainer
 
         valueLabel = new Label
         {
-            Text = ((int)defaultValue).ToString(),
+            Text = ((int)defaultValue).ToString(CultureInfo.CurrentCulture),
             MouseFilter = MouseFilterEnum.Ignore,
             CustomMinimumSize = new Vector2(40, 0),
             HorizontalAlignment = HorizontalAlignment.Right
@@ -261,9 +266,9 @@ public sealed partial class VoiceDebugPanel : PanelContainer
     {
         if (_highPassSlider == null || _lowPassSlider == null || _gainSlider == null) return;
 
-        _highPassValueLabel!.Text = ((int)_highPassSlider.Value).ToString();
-        _lowPassValueLabel!.Text = ((int)_lowPassSlider.Value).ToString();
-        _gainValueLabel!.Text = ((int)_gainSlider.Value).ToString();
+        _highPassValueLabel!.Text = ((int)_highPassSlider.Value).ToString(CultureInfo.CurrentCulture);
+        _lowPassValueLabel!.Text = ((int)_lowPassSlider.Value).ToString(CultureInfo.CurrentCulture);
+        _gainValueLabel!.Text = ((int)_gainSlider.Value).ToString(CultureInfo.CurrentCulture);
 
         OnAudioEffectsChanged?.Invoke(
             (float)_highPassSlider.Value,
@@ -365,7 +370,7 @@ public sealed partial class VoiceDebugPanel : PanelContainer
             _deviceLabel.Text = $"麦: {_inputDevice}";
             _deviceLabel.AddThemeColorOverride("font_color", _isListening ? new Color("BBD4FF") : new Color("8EA4C8"));
             _volumeBar.Value = _peakAmplitude;
-            _volumeValueLabel.Text = _peakAmplitude.ToString("F3");
+            _volumeValueLabel.Text = _peakAmplitude.ToString("F3", CultureInfo.CurrentCulture);
         }
 
         // 峰值条颜色渐变

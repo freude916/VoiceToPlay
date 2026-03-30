@@ -95,7 +95,9 @@ public sealed class MainMenuCommand : IVoiceCommand
     
     public static MainMenuCommand? Instance { get; private set; }
     
-    public IEnumerable<string> SupportedWords
+    public IEnumerable<string> SupportedWords => _cachedWords;
+    
+    public Update
     {
         get
         {

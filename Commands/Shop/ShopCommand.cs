@@ -22,24 +22,19 @@ public sealed class ShopCommand : IVoiceCommand
     private readonly Dictionary<string, string> _normalizedToRaw = new();
 
     /// <summary>
-    ///     当前 HoverTip 状态：用于在遗物和药水之间切换
+    ///     缓存的词表，SupportedWords getter 直接返回此缓存
     /// </summary>
-    private int _currentPreviewIndex;
+    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     /// <summary>
-    ///     当前预览模式：0=遗物, 1=药水
+    ///     当前预览索引
     /// </summary>
-    private int _previewMode;
+    private int _currentPreviewIndex;
 
     /// <summary>
     ///     当前显示 HoverTip 的 slot
     /// </summary>
     private NMerchantSlot? _currentPreviewSlot;
-
-    /// <summary>
-    ///     缓存的词表，SupportedWords getter 直接返回此缓存
-    /// </summary>
-    private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
     public ShopCommand()
     {
@@ -65,12 +60,10 @@ public sealed class ShopCommand : IVoiceCommand
         // 商店未打开时，先打开商店
         var inventory = merchantRoom.Inventory;
 
-        // 打开商店界面
-        if (!inventory.IsOpen)
+        if (inventory.Inventory == null)
         {
-            merchantRoom.OpenInventory();
-            MainFile.Logger.Debug("ShopCommand: opened inventory");
-            return CommandResult.Success;
+            MainFile.Logger.Warn("ShopCommand: shop inventory not ready");
+            return CommandResult.Failed;
         }
 
         var normalizedRemove = VoiceText.Normalize(RemoveCard);
@@ -122,7 +115,6 @@ public sealed class ShopCommand : IVoiceCommand
         if (instance == null) return;
 
         instance._currentPreviewIndex = 0;
-        instance._previewMode = 0;
 
         // 清理所有 slot 上的 HoverTip
         var merchantRoom = NMerchantRoom.Instance;
@@ -160,62 +152,37 @@ public sealed class ShopCommand : IVoiceCommand
             if (!GodotObject.IsInstanceValid(slot)) continue;
             if (!slot.Visible) continue;
 
-            var entry = slot.Entry;
-            if (!entry.IsStocked) continue;
+            if (!slot.Entry.IsStocked) continue;
 
-            // 删牌服务
-            if (slot is NMerchantCardRemoval)
+            switch (slot)
             {
-                _normalizedToRaw[VoiceText.Normalize(RemoveCard)] = RemoveCard;
-                continue;
-            }
-
-            // 卡牌名
-            if (slot is NMerchantCard)
-            {
-                if (entry is MerchantCardEntry cardEntry)
+                // 删牌服务
+                case NMerchantCardRemoval:
+                    _normalizedToRaw[VoiceText.Normalize(RemoveCard)] = RemoveCard;
+                    continue;
+                // 卡牌名
+                case NMerchantCard { Entry : MerchantCardEntry { CreationResult.Card: { } card } }:
                 {
-                    var cardModel = cardEntry.CreationResult?.Card;
-                    if (cardModel != null)
-                    {
-                        var cardName = VoiceText.Normalize(cardModel.Title);
-                        if (cardName.Length > 0)
-                            _normalizedToRaw[cardName] = cardName;
-                    }
+                    var cardName = VoiceText.Normalize(card.Title);
+                    if (cardName.Length > 0) _normalizedToRaw[cardName] = cardName;
+                    continue;
                 }
-
-                continue;
-            }
-
-            // 遗物名
-            if (slot is NMerchantRelic)
-            {
-                if (entry is MerchantRelicEntry relicEntry)
+                // 遗物名
+                case NMerchantRelic { Entry: MerchantRelicEntry { Model: { } relic } }:
                 {
-                    var relicModel = relicEntry.Model;
-                    if (relicModel != null)
-                    {
-                        var relicName = VoiceText.Normalize(relicModel.Title.GetFormattedText());
-                        if (relicName.Length > 0)
-                            _normalizedToRaw[relicName] = relicName;
-                    }
+                    var relicName = VoiceText.Normalize(relic.Title.GetFormattedText());
+                    if (relicName.Length > 0)
+                        _normalizedToRaw[relicName] = relicName;
+
+                    continue;
                 }
-
-                continue;
-            }
-
-            // 药水名
-            if (slot is NMerchantPotion)
-            {
-                if (entry is MerchantPotionEntry potionEntry)
+                // 药水名
+                case NMerchantPotion { Entry: MerchantPotionEntry { Model: { } potion } }:
                 {
-                    var potionModel = potionEntry.Model;
-                    if (potionModel != null)
-                    {
-                        var potionName = VoiceText.Normalize(potionModel.Title.GetFormattedText());
-                        if (potionName.Length > 0)
-                            _normalizedToRaw[potionName] = potionName;
-                    }
+                    var potionName = VoiceText.Normalize(potion.Title.GetFormattedText());
+                    if (potionName.Length > 0)
+                        _normalizedToRaw[potionName] = potionName;
+                    break;
                 }
             }
         }
@@ -225,132 +192,31 @@ public sealed class ShopCommand : IVoiceCommand
 
     private void PreviewFirstRelic(NMerchantInventory inventory)
     {
-        _previewMode = 0;
         _currentPreviewIndex = 0;
 
-        var relics = GetRelicSlots(inventory);
-        if (relics.Count == 0)
+        List<NMerchantSlot> items = [.. GetRelicSlots(inventory), ..GetPotionSlots(inventory)];
+        if (items.Count == 0)
         {
-            // 没有遗物，尝试药水
-            var potions = GetPotionSlots(inventory);
-            if (potions.Count > 0)
-            {
-                _previewMode = 1;
-                ShowHoverTipForSlot(potions[0]);
-                MainFile.Logger.Debug("ShopCommand: preview first potion (no relics)");
-            }
-            else
-            {
-                MainFile.Logger.Warn("ShopCommand: no relics or potions to preview");
-            }
-
+            MainFile.Logger.Warn("ShopCommand: no relics or potions to preview");
             return;
         }
 
-        ShowHoverTipForSlot(relics[0]);
-        MainFile.Logger.Debug("ShopCommand: preview first relic");
+        ShowHoverTipForSlot(items[0]);
+        MainFile.Logger.Debug("ShopCommand: preview first item");
     }
 
     private void PreviewNextItem(NMerchantInventory inventory)
     {
-        var relics = GetRelicSlots(inventory);
-        var potions = GetPotionSlots(inventory);
-
-        if (relics.Count == 0 && potions.Count == 0)
+        List<NMerchantSlot> items = [.. GetRelicSlots(inventory), .. GetPotionSlots(inventory)];
+        if (items.Count == 0)
         {
             MainFile.Logger.Warn("ShopCommand: no items to preview");
             return;
         }
 
-        // 切换逻辑：
-        // mode 0 = 遗物, mode 1 = 药水
-        // 先遍历完遗物，再遍历药水，然后循环回第一个遗物
-        if (_previewMode == 0)
-        {
-            // 当前在遗物模式
-            if (relics.Count > 0)
-            {
-                _currentPreviewIndex++;
-                if (_currentPreviewIndex >= relics.Count)
-                {
-                    // 切换到药水
-                    _previewMode = 1;
-                    _currentPreviewIndex = 0;
-                    if (potions.Count > 0)
-                    {
-                        ShowHoverTipForSlot(potions[0]);
-                        MainFile.Logger.Debug("ShopCommand: switch to first potion");
-                    }
-                    else
-                    {
-                        // 没有药水，回到第一个遗物
-                        _previewMode = 0;
-                        _currentPreviewIndex = 0;
-                        ShowHoverTipForSlot(relics[0]);
-                        MainFile.Logger.Debug("ShopCommand: no potions, back to first relic");
-                    }
-                }
-                else
-                {
-                    ShowHoverTipForSlot(relics[_currentPreviewIndex]);
-                    MainFile.Logger.Debug($"ShopCommand: preview relic {_currentPreviewIndex + 1}");
-                }
-            }
-            else
-            {
-                // 没有遗物，切换到药水
-                _previewMode = 1;
-                _currentPreviewIndex = 0;
-                if (potions.Count > 0)
-                {
-                    ShowHoverTipForSlot(potions[0]);
-                    MainFile.Logger.Debug("ShopCommand: no relics, switch to first potion");
-                }
-            }
-        }
-        else
-        {
-            // 当前在药水模式
-            if (potions.Count > 0)
-            {
-                _currentPreviewIndex++;
-                if (_currentPreviewIndex >= potions.Count)
-                {
-                    // 切换回遗物
-                    _previewMode = 0;
-                    _currentPreviewIndex = 0;
-                    if (relics.Count > 0)
-                    {
-                        ShowHoverTipForSlot(relics[0]);
-                        MainFile.Logger.Debug("ShopCommand: switch back to first relic");
-                    }
-                    else
-                    {
-                        // 没有遗物，回到第一个药水
-                        _previewMode = 1;
-                        _currentPreviewIndex = 0;
-                        ShowHoverTipForSlot(potions[0]);
-                        MainFile.Logger.Debug("ShopCommand: no relics, back to first potion");
-                    }
-                }
-                else
-                {
-                    ShowHoverTipForSlot(potions[_currentPreviewIndex]);
-                    MainFile.Logger.Debug($"ShopCommand: preview potion {_currentPreviewIndex + 1}");
-                }
-            }
-            else
-            {
-                // 没有药水，切换回遗物
-                _previewMode = 0;
-                _currentPreviewIndex = 0;
-                if (relics.Count > 0)
-                {
-                    ShowHoverTipForSlot(relics[0]);
-                    MainFile.Logger.Debug("ShopCommand: no potions, switch to first relic");
-                }
-            }
-        }
+        _currentPreviewIndex = (_currentPreviewIndex + 1) % items.Count;
+        ShowHoverTipForSlot(items[_currentPreviewIndex]);
+        MainFile.Logger.Debug($"ShopCommand: preview item {_currentPreviewIndex + 1}/{items.Count}");
     }
 
     private void ShowHoverTipForSlot(NMerchantSlot slot)
@@ -367,61 +233,16 @@ public sealed class ShopCommand : IVoiceCommand
         // 清理当前 slot 上已有的 HoverTip
         NHoverTipSet.Remove(slot);
 
-        var entry = slot.Entry;
-
         switch (slot)
         {
-            case NMerchantRelic:
-            {
-                if (entry is MerchantRelicEntry relicEntry)
-                {
-                    var relicModel = relicEntry.Model;
-                    if (relicModel != null)
-                    {
-                        var tipSet = NHoverTipSet.CreateAndShow(slot, relicModel.HoverTips);
-                        tipSet.GlobalPosition = slot.GlobalPosition;
-                        if (slot.GlobalPosition.X > slot.GetViewport().GetVisibleRect().Size.X * 0.5f)
-                        {
-                            tipSet.SetAlignment(slot, HoverTipAlignment.Left);
-                            tipSet.GlobalPosition -= slot.Size * 0.5f * slot.Scale;
-                        }
-                        else
-                        {
-                            tipSet.SetAlignment(slot, HoverTipAlignment.Right);
-                            tipSet.GlobalPosition += Vector2.Right * slot.Size.X * 0.5f * slot.Scale +
-                                                      Vector2.Up * slot.Size.Y * 0.5f * slot.Scale;
-                        }
-                    }
-                }
-
+            case NMerchantRelic { Entry: MerchantRelicEntry { Model: { } relic } }:
+                NHoverTipSet.CreateAndShow(slot, relic.HoverTips, HoverTipAlignment.Center);
                 TryFocus(slot);
                 break;
-            }
-            case NMerchantPotion:
-            {
-                if (entry is MerchantPotionEntry potionEntry)
-                {
-                    var potionModel = potionEntry.Model;
-                    if (potionModel != null)
-                    {
-                        var tipSet = NHoverTipSet.CreateAndShow(slot, potionModel.HoverTips);
-                        tipSet.GlobalPosition = slot.GlobalPosition;
-                        if (slot.GlobalPosition.X > slot.GetViewport().GetVisibleRect().Size.X * 0.5f)
-                        {
-                            tipSet.SetAlignment(slot, HoverTipAlignment.Left);
-                            tipSet.GlobalPosition -= slot.Size * 0.5f * slot.Scale;
-                        }
-                        else
-                        {
-                            tipSet.GlobalPosition += Vector2.Right * slot.Size.X * 0.5f * slot.Scale +
-                                                      Vector2.Up * slot.Size.Y * 0.5f * slot.Scale;
-                        }
-                    }
-                }
-
+            case NMerchantPotion { Entry: MerchantPotionEntry { Model: { } potion } }:
+                NHoverTipSet.CreateAndShow(slot, potion.HoverTips, HoverTipAlignment.Center);
                 TryFocus(slot);
                 break;
-            }
         }
     }
 
@@ -484,11 +305,8 @@ public sealed class ShopCommand : IVoiceCommand
                 return CommandResult.Failed;
             }
 
-            // 删牌需要打开卡牌选择界面，使用模拟点击方式
-            // 先让 slot 获得焦点（这会设置 _isHovered = true）
-            TryFocus(removalSlot);
-            removalSlot.Hitbox.DebugPress();
-            removalSlot.Hitbox.DebugRelease();
+            // 直接调用购买逻辑（和 MCP 一致）
+            _ = entry.OnTryPurchaseWrapper(inventory.Inventory);
             MainFile.Logger.Debug("ShopCommand: triggered card removal");
             return CommandResult.Success;
         }
@@ -507,68 +325,39 @@ public sealed class ShopCommand : IVoiceCommand
             var entry = slot.Entry;
             if (!entry.IsStocked) continue;
 
-            string? itemName = null;
-
-            switch (slot)
+            var itemName = slot switch
             {
-                case NMerchantCard:
-                {
-                    if (entry is MerchantCardEntry cardEntry)
-                    {
-                        var cardModel = cardEntry.CreationResult?.Card;
-                        if (cardModel != null)
-                            itemName = VoiceText.Normalize(cardModel.Title);
-                    }
+                NMerchantCard { Entry: MerchantCardEntry { CreationResult.Card: { } card } } => VoiceText.Normalize(
+                    card.Title),
+                NMerchantRelic { Entry: MerchantRelicEntry { Model: { } relic } } => VoiceText.Normalize(
+                    relic.Title.GetFormattedText()),
+                NMerchantPotion { Entry: MerchantPotionEntry { Model: { } potion } } => VoiceText.Normalize(
+                    potion.Title.GetFormattedText()),
+                _ => null
+            };
 
-                    break;
-                }
-                case NMerchantRelic:
-                {
-                    if (entry is MerchantRelicEntry relicEntry)
-                    {
-                        var relicModel = relicEntry.Model;
-                        if (relicModel != null)
-                            itemName = VoiceText.Normalize(relicModel.Title.GetFormattedText());
-                    }
+            if (itemName != normalizedName) continue;
 
-                    break;
-                }
-                case NMerchantPotion:
-                {
-                    if (entry is MerchantPotionEntry potionEntry)
-                    {
-                        var potionModel = potionEntry.Model;
-                        if (potionModel != null)
-                            itemName = VoiceText.Normalize(potionModel.Title.GetFormattedText());
-                    }
-
-                    break;
-                }
-            }
-
-            if (itemName == normalizedName)
+            // 检查金币是否足够
+            if (!entry.EnoughGold)
             {
-                // 检查金币是否足够
-                if (!entry.EnoughGold)
-                {
-                    MainFile.Logger.Warn($"ShopCommand: not enough gold for '{normalizedName}'");
-                    return CommandResult.Failed;
-                }
-
-                // 清理 HoverTip
-                NHoverTipSet.Remove(slot);
-
-                // 直接调用购买逻辑（绕过 UI 点击）
-                var success = entry.OnTryPurchaseWrapper(inventory.Inventory).GetAwaiter().GetResult();
-                if (success)
-                {
-                    MainFile.Logger.Debug($"ShopCommand: bought '{normalizedName}'");
-                    return CommandResult.Success;
-                }
-
-                MainFile.Logger.Warn($"ShopCommand: purchase failed for '{normalizedName}'");
+                MainFile.Logger.Warn($"ShopCommand: not enough gold for '{normalizedName}'");
                 return CommandResult.Failed;
             }
+
+            // 清理 HoverTip
+            NHoverTipSet.Remove(slot);
+
+            // 直接调用购买逻辑（绕过 UI 点击）
+            var success = entry.OnTryPurchaseWrapper(inventory.Inventory).GetAwaiter().GetResult();
+            if (success)
+            {
+                MainFile.Logger.Debug($"ShopCommand: bought '{normalizedName}'");
+                return CommandResult.Success;
+            }
+
+            MainFile.Logger.Warn($"ShopCommand: purchase failed for '{normalizedName}'");
+            return CommandResult.Failed;
         }
 
         MainFile.Logger.Warn($"ShopCommand: item '{normalizedName}' not found");

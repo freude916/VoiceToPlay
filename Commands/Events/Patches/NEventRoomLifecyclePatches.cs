@@ -2,7 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 
-namespace VoiceToPlay.Commands.Event.Patches;
+namespace VoiceToPlay.Commands.Events.Patches;
 
 /// <summary>
 ///     NEventRoom 生命周期补丁：管理事件选项词表
@@ -13,7 +13,7 @@ internal static class NEventRoomSetOptionsPatch
     private static void Postfix()
     {
         MainFile.Logger.Debug("NEventRoom.SetOptions, refreshing vocabulary");
-        EventCommand.RefreshVocabulary();
+        EventsCommand.RefreshVocabulary();
     }
 }
 
@@ -26,6 +26,6 @@ internal static class NEventLayoutDisableOptionsPatch
     private static void Postfix()
     {
         MainFile.Logger.Debug("NEventLayout.DisableEventOptions, clearing vocabulary");
-        EventCommand.RefreshVocabulary();
+        EventsCommand.RefreshVocabulary();
     }
 }

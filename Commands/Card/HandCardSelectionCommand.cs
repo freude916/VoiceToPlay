@@ -42,7 +42,7 @@ public sealed class HandCardSelectionCommand : IVoiceCommand
 
     public CommandResult Execute(string word)
     {
-        NHandCardHolder? holder = null;
+        NHandCardHolder? holder;
 
         // 尝试匹配带数字后缀的词
         if (_indexedWordToHolder.TryGetValue(word, out var cachedHolder))
@@ -107,12 +107,9 @@ public sealed class HandCardSelectionCommand : IVoiceCommand
 
         // 使用 CardIndexedCommandCatalog 生成带数字后缀的词表
         var wordToCard = CardIndexedCommandCatalog.BuildWordToCard(cardModels);
-        foreach (var kvp in wordToCard)
-        {
-            var cardModel = kvp.Value;
+        foreach (var (key, cardModel) in wordToCard)
             if (cardToHolder.TryGetValue(cardModel, out var holder))
-                _indexedWordToHolder[kvp.Key] = holder;
-        }
+                _indexedWordToHolder[key] = holder;
 
         // 收集基础卡牌名 → 首个 holder
         foreach (var cardModel in cardModels)

@@ -3,10 +3,9 @@ using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens;
-using VoiceToPlay.Voice;
 using VoiceToPlay.Voice.Core;
 
-namespace VoiceToPlay.Commands.DeckView;
+namespace VoiceToPlay.Commands.InspectCard;
 
 /// <summary>
 ///     卡牌详情界面命令。处理查看升级、左右翻页、关闭等。
@@ -38,17 +37,8 @@ public sealed class InspectCardCommand : IVoiceCommand
             return CommandResult.Failed;
         }
 
-        try
-        {
-            action.Invoke();
-            MainFile.Logger.Info($"InspectCardCommand: executed '{word}'");
-            return CommandResult.Success;
-        }
-        catch (Exception e)
-        {
-            MainFile.Logger.Warn($"InspectCardCommand: failed to execute '{word}': {e.Message}");
-            return CommandResult.Failed;
-        }
+        action.Invoke();
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -71,35 +61,29 @@ public sealed class InspectCardCommand : IVoiceCommand
         // "查看升级" - 切换升级预览
         var upgradeTickbox = screen.GetNode<NTickbox>("%Upgrade");
         if (upgradeTickbox != null && GodotObject.IsInstanceValid(upgradeTickbox) && upgradeTickbox.Visible)
-        {
             _wordToAction["查看升级"] = () =>
             {
                 if (upgradeTickbox.IsEnabled)
                     upgradeTickbox.ForceClick();
             };
-        }
 
         // "上一张" / "下一张" - 翻页
         var leftButton = screen.GetNode<NButton>("LeftArrow");
         var rightButton = screen.GetNode<NButton>("RightArrow");
 
         if (leftButton != null && GodotObject.IsInstanceValid(leftButton) && leftButton.Visible)
-        {
             _wordToAction["上一张"] = () =>
             {
                 if (leftButton.IsEnabled)
                     leftButton.ForceClick();
             };
-        }
 
         if (rightButton != null && GodotObject.IsInstanceValid(rightButton) && rightButton.Visible)
-        {
             _wordToAction["下一张"] = () =>
             {
                 if (rightButton.IsEnabled)
                     rightButton.ForceClick();
             };
-        }
 
         // "关闭" - 关闭详情界面
         _wordToAction["关闭"] = () => screen.Close();

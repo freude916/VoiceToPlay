@@ -103,7 +103,8 @@ public sealed class CharacterSelectCommand : IVoiceCommand
             return [];
         }
 
-        MainFile.Logger.Info($"CharacterSelectCommand: buttonContainer found, children count: {buttonContainer.GetChildCount()}");
+        MainFile.Logger.Info(
+            $"CharacterSelectCommand: buttonContainer found, children count: {buttonContainer.GetChildCount()}");
 
         // 角色按钮
         foreach (var child in buttonContainer.GetChildren())

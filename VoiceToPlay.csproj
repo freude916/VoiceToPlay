@@ -1,28 +1,25 @@
-﻿<Project Sdk="Godot.NET.Sdk/4.5.1" InitialTargets="CheckDependencyPaths">
+<Project Sdk="Godot.NET.Sdk/4.5.1" InitialTargets="CheckDependencyPaths">
+
+    <!-- ==================== 基本配置 ==================== -->
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <JiebaPackageVersion>0.42.2</JiebaPackageVersion>
         <VoskPackageVersion>0.3.38</VoskPackageVersion>
         <ImplicitUsings>true</ImplicitUsings>
-        <Nullable>enable</Nullable> <!--Makes code analysis regarding null values stricter.-->
+        <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
         <SkipCopyToModsFolder>false</SkipCopyToModsFolder>
         <DefaultItemExcludes>packages/**</DefaultItemExcludes>
         <AppOutputBase>$(MSBuildProjectDirectory)\</AppOutputBase>
         <PathMap>$(AppOutputBase)=.\</PathMap>
-        <!-- 在构建时强制运行代码风格分析，让 dotnet build 和 Rider 检查一致 -->
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <AnalysisLevel>latest-all</AnalysisLevel>
-        <!-- Godot 节点由场景树管理，不需要手动 Dispose -->
-        <!-- Diasble architecture mismatch warning; mods are ideally built for all platforms (MSIL)
-             while your local StS2 version will be for your specific platform. -->
         <NoWarn>CA1003,CA1707,CA2000,MSB3270</NoWarn>
-        <!-- 不要展示诊断链接，可以让 LLM 上下文更少消耗 -->
         <IncludeDiagnosticRuleLink>false</IncludeDiagnosticRuleLink>
     </PropertyGroup>
 
-    <!-- OS Detection -->
+    <!-- ==================== OS 检测 ==================== -->
     <PropertyGroup>
         <IsWindows>false</IsWindows>
         <IsLinux>false</IsLinux>
@@ -32,15 +29,12 @@
         <IsOSX Condition="$([MSBuild]::IsOSPlatform('OSX'))">true</IsOSX>
     </PropertyGroup>
 
-    <!-- // NOTE: Megadot is version 4.5.1, and the game won't load your .pck if the Godot version used is newer. -->
     <!-- Windows -->
     <PropertyGroup Condition="'$(IsWindows)' == 'true'">
         <AutoSteamPath>$(registry:HKEY_CURRENT_USER\Software\Valve\Steam@SteamPath)\steamapps</AutoSteamPath>
         <SteamLibraryPath Condition="Exists('$(AutoSteamPath)/common/Slay the Spire 2')">$(AutoSteamPath)</SteamLibraryPath>
         <GodotPath Condition="'$(GodotPath)' == ''">C:/megadot/MegaDot_v4.5.1-stable_mono_win64.exe</GodotPath>
-        <!-- If on Windows and Slay the Spire 2 is not installed in your default steam library, adjust the following. -->
         <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">C:/Program Files (x86)/Steam/steamapps</SteamLibraryPath>
-        <!-- The below should not need to be changed. -->
         <Sts2Path Condition="'$(Sts2Path)' == ''">$(SteamLibraryPath)/common/Slay the Spire 2</Sts2Path>
         <ModsPath>$(Sts2Path)/mods/</ModsPath>
         <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(Sts2Path)/data_sts2_windows_x86_64</Sts2DataDir>
@@ -50,7 +44,6 @@
     <PropertyGroup Condition="'$(IsLinux)' == 'true'">
         <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">$(HOME)/.local/share/Steam/steamapps</SteamLibraryPath>
         <GodotPath Condition="'$(GodotPath)' == ''">$(SteamLibraryPath)/common/Godot Engine/godot.x11.opt.tools.64</GodotPath>
-        <!-- The below should not need to be changed. -->
         <Sts2Path Condition="'$(Sts2Path)' == ''">$(SteamLibraryPath)/common/Slay the Spire 2</Sts2Path>
         <ModsPath>$(Sts2Path)/mods/</ModsPath>
         <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(Sts2Path)/data_sts2_linuxbsd_x86_64</Sts2DataDir>
@@ -60,12 +53,12 @@
     <PropertyGroup Condition="'$(IsOSX)' == 'true'">
         <SteamLibraryPath Condition="'$(SteamLibraryPath)' == ''">$(HOME)/Library/Application Support/Steam/steamapps</SteamLibraryPath>
         <GodotPath Condition="'$(GodotPath)' == ''">$(HOME)/Applications/Godot_mono.app/Contents/MacOS/Godot</GodotPath>
-        <!-- The below should not need to be changed. -->
         <Sts2Path Condition="'$(Sts2Path)' == ''">$(SteamLibraryPath)/common/Slay the Spire 2</Sts2Path>
         <ModsPath>$(Sts2Path)/SlayTheSpire2.app/Contents/MacOS/mods/</ModsPath>
         <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(Sts2Path)/SlayTheSpire2.app/Contents/Resources/data_sts2_macos_x86_64</Sts2DataDir>
     </PropertyGroup>
 
+    <!-- ==================== NuGet packages ==================== -->
     <ItemGroup>
         <PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3">
             <PrivateAssets>all</PrivateAssets>
@@ -75,11 +68,11 @@
         <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.3"/>
         <PackageReference Include="System.Text.Json" Version="10.0.5"/>
         <PackageReference Include="Vosk" Version="0.3.38"/>
-        <!--<PackageReference Include="Alchyr.Sts2.BaseLib" Version="*" PrivateAssets="All" />
-        <PackageReference Include="Alchyr.Sts2.ModAnalyzers" Version="*"/>-->
     </ItemGroup>
+
     <Import Project="VoskModel.targets"/>
 
+    <!-- ==================== Game Base & Lib Mod ==================== -->
     <ItemGroup Condition="Exists('$(Sts2DataDir)')">
         <Reference Include="0Harmony">
             <HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath>
@@ -88,10 +81,11 @@
         <Reference Include="sts2">
             <HintPath>$(Sts2DataDir)/sts2.dll</HintPath>
             <Private>false</Private>
-            <Publicize>true</Publicize> <!--Allows private/protected field references but may cause errors.-->
+            <Publicize>true</Publicize>
         </Reference>
     </ItemGroup>
 
+    <!-- ==================== 项目文件 ==================== -->
     <ItemGroup>
         <AdditionalFiles Include="VoiceToPlay/localization/**/*.json"/>
     </ItemGroup>
@@ -112,72 +106,66 @@
         <None Include="VoiceToPlay.json"/>
         <None Include="project.godot"/>
         <None Include="VoiceToPlay/**"/>
-        <None Include="README.md"/>
+        <None Include="*.md"/>
+        <None Include="docs/**"/>
+        <None Include="Commands/**/snippets.md"/>
+        <None Include="**/*.md"/>
+        <None Include="jieba/Resources/*"/>
     </ItemGroup>
 
-    <ItemGroup>
-        <Content Include="AGENTS.md"/>
-        <Content Include="Directory.Build.props"/>
-        <Content Include="docs\COMMANDS.md"/>
-        <Content Include="docs\filter_words\extract_vocab.py"/>
-        <Content Include="docs\filter_words\NOTES.md"/>
-        <Content Include="docs\filter_words\small_model_words.txt"/>
-        <Content Include="jieba\Resources\char_state_tab.json"/>
-        <Content Include="jieba\Resources\cn_synonym.txt"/>
-        <Content Include="jieba\Resources\dict.txt"/>
-        <Content Include="jieba\Resources\idf.txt"/>
-        <Content Include="jieba\Resources\pos_prob_emit.json"/>
-        <Content Include="jieba\Resources\pos_prob_start.json"/>
-        <Content Include="jieba\Resources\pos_prob_trans.json"/>
-        <Content Include="jieba\Resources\prob_emit.json"/>
-        <Content Include="jieba\Resources\prob_trans.json"/>
-        <Content Include="jieba\Resources\stopwords.txt"/>
-        <Content Include="Plan.md"/>
-        <Content Include="Voice\ARCHITECTURE.md"/>
-        <Content Include="Voice\SNIPPETS.md"/>
-    </ItemGroup>
-
+    <!-- ==================== 构建检查 ==================== -->
     <Target Name="CheckDependencyPaths">
         <Error Text=" Slay the Spire 2 data not found at path '$(Sts2DataDir)'" Condition="'$(Sts2DataDir)' == '' or !Exists('$(Sts2DataDir)')"/>
         <Error Text=" Godot not found at path '$(GodotPath)'" Condition="'$(GodotPath)' == '' or !Exists('$(GodotPath)')"/>
     </Target>
 
+    <!-- ==================== 发布后复制到 Mods ==================== -->
     <Target Name="CopyToModsFolderOnPublish" AfterTargets="Publish" Condition="'$(SkipCopyToModsFolder)' != 'true'">
         <Message Text="Copying mod runtime files to mods folder." Importance="high"/>
+
         <ItemGroup>
+            <!-- Mod DLL -->
             <ModRuntimeFiles Include="$(TargetDir)$(MSBuildProjectName).dll;$(TargetDir)$(MSBuildProjectName).pdb;$(TargetDir)$(MSBuildProjectName).deps.json"/>
             <ModRuntimeFiles Include="$(TargetDir)Vosk*.dll"/>
             <ModRuntimeFiles Include="$(TargetDir)System.Text.Json*.dll;$(TargetDir)System.Text.Encodings.Web*.dll;$(TargetDir)System.IO.Pipelines*.dll"/>
             <ModRuntimeFiles Include="$(TargetDir)System.Configuration.ConfigurationManager*.dll;$(TargetDir)System.Diagnostics.EventLog*.dll;$(TargetDir)System.Security.Cryptography.ProtectedData*.dll"/>
             <ModRuntimeFiles Include="$(TargetDir)JiebaNet.Segmenter*.dll;$(TargetDir)Newtonsoft.Json*.dll"/>
+
+            <!-- Models -->
             <ModModelFiles Include="$(TargetDir)models/**;$(MSBuildProjectDirectory)/models/**"/>
+
+            <!-- Native libs -->
             <ModNativeFiles Include="$(TargetDir)libvosk.*"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/dict.txt"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/idf.txt"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/stopwords.txt"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/cn_synonym.txt"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/char_state_tab.json"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/prob_emit.json"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/prob_trans.json"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/pos_prob_emit.json"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/pos_prob_start.json"/>
-            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/pos_prob_trans.json"/>
+
+            <!-- Jieba -->
+            <JiebaResourceFiles Include="$(MSBuildProjectDirectory)/jieba/Resources/*"/>
+
+            <!-- Vosk native (Windows) -->
             <VoskWindowsNativeFiles Include="$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libwinpthread-1.dll" Condition="Exists('$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libwinpthread-1.dll')"/>
             <VoskWindowsNativeFiles Include="$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libgcc_s_seh-1.dll" Condition="Exists('$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libgcc_s_seh-1.dll')"/>
             <VoskWindowsNativeFiles Include="$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libstdc++-6.dll" Condition="Exists('$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/win-x64/libstdc++-6.dll')"/>
+
+            <!-- Vosk native (Linux/macOS) -->
             <VoskLinuxNativeFiles Include="$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/linux-x64/libvosk.so" Condition="Exists('$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/linux-x64/libvosk.so')"/>
             <VoskOsxNativeFiles Include="$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/osx-universal/libvosk.dylib" Condition="Exists('$(NuGetPackageRoot)/vosk/$(VoskPackageVersion)/build/lib/osx-universal/libvosk.dylib')"/>
         </ItemGroup>
+
+        <!-- 复制文件 -->
         <Copy SourceFiles="@(ModRuntimeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(ModNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
+
         <MakeDir Directories="$(ModsPath)$(MSBuildProjectName)/Resources"/>
         <Copy SourceFiles="@(JiebaResourceFiles)" DestinationFiles="@(JiebaResourceFiles->'$(ModsPath)$(MSBuildProjectName)/Resources/%(Filename)%(Extension)')" SkipUnchangedFiles="true"/>
+
         <Copy SourceFiles="@(VoskWindowsNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(VoskLinuxNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(VoskOsxNativeFiles)" DestinationFolder="$(ModsPath)$(MSBuildProjectName)/" SkipUnchangedFiles="true"/>
+
         <Copy SourceFiles="VoiceToPlay.json" DestinationFiles="$(ModsPath)$(MSBuildProjectName)/$(MSBuildProjectName).json"/>
         <Copy SourceFiles="README.md" DestinationFiles="$(ModsPath)$(MSBuildProjectName)/README.md" SkipUnchangedFiles="true"/>
         <Copy SourceFiles="@(ModModelFiles)" DestinationFiles="@(ModModelFiles->'$(ModsPath)$(MSBuildProjectName)/models/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true"/>
+
+        <!-- BaseLib -->
         <Message Text="Copying BaseLib to mods folder." Importance="high"/>
         <ItemGroup>
             <BaseLibFiles Include="$(NuGetPackageRoot)/alchyr.sts2.baselib/**/lib/**/BaseLib.dll;$(NuGetPackageRoot)/alchyr.sts2.baselib/**/Content/BaseLib.pck;$(NuGetPackageRoot)/alchyr.sts2.baselib/**/Content/BaseLib.json;"/>
@@ -189,6 +177,7 @@
         <Message Text="Skipping copy to mods folder because SkipCopyToModsFolder=true." Importance="high"/>
     </Target>
 
+    <!-- ==================== Godot PCK ==================== -->
     <Target Name="GodotPublish" AfterTargets="Publish" Condition="'$(GodotPath)' != '' and Exists('$(GodotPath)') and '$(IsInnerGodotExport)' != 'true'">
         <Message Text="Exporting Godot .pck to mods folder" Importance="high"/>
         <Message Text="Assembly search paths: $(TargetDir);$(Sts2DataDir)" Importance="high"/>
@@ -198,4 +187,5 @@
     <Target Name="GodotPublishSkipped" AfterTargets="Publish" Condition="'$(GodotPath)' == '' or !Exists('$(GodotPath)')">
         <Message Text="Skipping Godot .pck export because GodotPath is not configured." Importance="high"/>
     </Target>
+
 </Project>

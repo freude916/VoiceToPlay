@@ -46,17 +46,9 @@ public sealed class PotionCommand : IVoiceCommand
             return CommandResult.Failed;
         }
 
-        try
-        {
-            action.Invoke();
-            MainFile.Logger.Info($"PotionCommand: executed '{word}'");
-            return CommandResult.Success;
-        }
-        catch (Exception e)
-        {
-            MainFile.Logger.Warn($"PotionCommand: failed to execute '{word}': {e.Message}");
-            return CommandResult.Failed;
-        }
+        action.Invoke();
+        MainFile.Logger.Info($"PotionCommand: executed '{word}'");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;

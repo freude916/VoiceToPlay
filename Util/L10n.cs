@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace VoiceToPlay.Util;
 
 /// <summary>
@@ -35,7 +37,7 @@ internal static class L10n
     /// </summary>
     public static string ChineseNumber(int n)
     {
-        return n is >= 0 and <= 9 ? ChineseNumbers[n] : n.ToString();
+        return n is >= 0 and <= 9 ? ChineseNumbers[n] : n.ToString(CultureInfo.CurrentCulture);
     }
 
     /// <summary>

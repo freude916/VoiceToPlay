@@ -2,7 +2,7 @@ using HarmonyLib;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 
-namespace VoiceToPlay.Commands.DeckView.Patches;
+namespace VoiceToPlay.Commands.InspectCard.Patches;
 
 /// <summary>
 ///     NInspectCardScreen 生命周期补丁：管理卡牌详情词表

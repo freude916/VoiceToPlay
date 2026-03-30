@@ -13,7 +13,13 @@ internal static class NMerchantRoomEnterPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Debug("NMerchantRoom._EnterTree, refreshing vocabulary");
+        MainFile.Logger.Debug("NMerchantRoom._EnterTree, opening inventory and refreshing vocabulary");
+
+        // 自动打开商店界面（商店默认关闭，需要手动打开才能获取物品列表）
+        var merchantRoom = NMerchantRoom.Instance;
+        if (merchantRoom?.Inventory != null && !merchantRoom.Inventory.IsOpen)
+            merchantRoom.OpenInventory();
+
         ShopCommand.RefreshVocabulary();
     }
 }

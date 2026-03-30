@@ -65,17 +65,8 @@ public sealed class DeckViewCommand : IVoiceCommand
         // 再检查其他命令
         else if (_wordToAction.TryGetValue(word, out var action))
         {
-            try
-            {
-                action.Invoke();
-                MainFile.Logger.Info($"DeckViewCommand: executed '{word}'");
-                return CommandResult.Success;
-            }
-            catch (Exception e)
-            {
-                MainFile.Logger.Warn($"DeckViewCommand: failed to execute '{word}': {e.Message}");
-                return CommandResult.Failed;
-            }
+            action.Invoke();
+            return CommandResult.Success;
         }
         else
         {

@@ -5,8 +5,9 @@ using VoiceToPlay.Commands.CardRow;
 using VoiceToPlay.Commands.CharacterSelect;
 using VoiceToPlay.Commands.Combat;
 using VoiceToPlay.Commands.DeckView;
-using VoiceToPlay.Commands.Event;
+using VoiceToPlay.Commands.Events;
 using VoiceToPlay.Commands.GlobalUi;
+using VoiceToPlay.Commands.InspectCard;
 using VoiceToPlay.Commands.MainMenu;
 using VoiceToPlay.Commands.Map;
 using VoiceToPlay.Commands.Potion;
@@ -41,7 +42,7 @@ internal sealed partial class VoiceEntryNode : Node
         _commandEngine = new VoiceCommandEngine();
 
         // 2. 注册命令（按功能分区）
-        
+
         // 全局 - UI 按钮
         _commandEngine.Register(new ProceedCommand());
         _commandEngine.Register(new ConfirmCommand());
@@ -50,13 +51,13 @@ internal sealed partial class VoiceEntryNode : Node
         // 主菜单 / 角色选择
         _commandEngine.Register(new MainMenuCommand());
         _commandEngine.Register(new CharacterSelectCommand());
-        
+
         // 战斗 - 全功能 UI
         _commandEngine.Register(new GlobalUiCommand());
 
         // 战斗 - 药水
         _commandEngine.Register(new PotionCommand());
-        
+
         // 战斗 - 卡牌操作
         _commandEngine.Register(new PlayCardCommand());
         _commandEngine.Register(new HandCardSelectionCommand());
@@ -70,7 +71,7 @@ internal sealed partial class VoiceEntryNode : Node
 
         // 地图 / 事件 / 宝箱 / 休息 / 商店
         _commandEngine.Register(new MapCommand());
-        _commandEngine.Register(new EventCommand());
+        _commandEngine.Register(new EventsCommand());
         _commandEngine.Register(new TreasureCommand());
         _commandEngine.Register(new RestSiteCommand());
         _commandEngine.Register(new ShopCommand());

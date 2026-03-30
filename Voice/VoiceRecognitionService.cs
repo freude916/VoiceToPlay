@@ -23,10 +23,8 @@ internal sealed class VoiceRecognitionService : IDisposable
     private const int SampleRate = 16000;
     private const int ReadFrames = 2048;
     private const float PeakDecayRate = 0.92f;
+    private const int MaxQueueSize = 100;
     private readonly VoiceAudioCaptureService _audioCapture;
-
-    // 异步识别
-    private readonly BlockingCollection<byte[]> _audioQueue = new(100);
 
     private readonly VoiceCommandEngine _commandEngine;
     private readonly GrammarSession _grammarSession;
@@ -38,6 +36,9 @@ internal sealed class VoiceRecognitionService : IDisposable
 
     // 结果队列 (后台线程 -> 主线程)
     private readonly ConcurrentQueue<RecognitionResult> _resultQueue = new();
+
+    // 异步识别
+    private BlockingCollection<byte[]> _audioQueue = new(MaxQueueSize);
     private DateTime _lastPartialChangeTime = DateTime.UtcNow;
     private string _lastPartialText = string.Empty; // 主线程用
 
@@ -204,13 +205,19 @@ internal sealed class VoiceRecognitionService : IDisposable
         _listeningEnabled = enabled;
         MainFile.Logger.Info($"Voice listening: {(enabled ? "enabled" : "disabled")}");
 
-        if (enabled) return;
-
-        LastPeakAmplitude = 0f;
-        _lastPartialText = string.Empty;
-        PublishRecognitionText(string.Empty, true);
-        _audioCapture.ClearTransientBuffers();
-        ClearAudioQueue();
+        if (enabled)
+        {
+            _audioCapture.StartCapture();
+            RestartRecognitionThread();
+        }
+        else
+        {
+            _audioCapture.StopCapture();
+            StopRecognitionThread();
+            LastPeakAmplitude = 0f;
+            _lastPartialText = string.Empty;
+            PublishRecognitionText(string.Empty, true);
+        }
     }
 
     /// <summary>
@@ -324,6 +331,21 @@ internal sealed class VoiceRecognitionService : IDisposable
         _recognitionThread.Start();
     }
 
+    private void StopRecognitionThread()
+    {
+        _running = false;
+        _audioQueue.CompleteAdding();
+        _recognitionThread?.Join(1000);
+        _recognitionThread = null;
+    }
+
+    private void RestartRecognitionThread()
+    {
+        // 重建队列（旧队列已被 CompleteAdding）
+        _audioQueue = new BlockingCollection<byte[]>(MaxQueueSize);
+        StartRecognitionThread();
+    }
+
     private void RecognitionLoop()
     {
         MainFile.Logger.Debug("Voice recognition thread started");
@@ -376,18 +398,9 @@ internal sealed class VoiceRecognitionService : IDisposable
                 _resultQueue.Enqueue(result);
             }
         }
-        catch (Exception ex)
+        finally
         {
-            MainFile.Logger.Error($"Voice recognition thread error: {ex}");
-        }
-
-        MainFile.Logger.Debug("Voice recognition thread stopped");
-    }
-
-    private void ClearAudioQueue()
-    {
-        while (_audioQueue.TryTake(out _))
-        {
+            MainFile.Logger.Debug("Voice recognition thread stopped");
         }
     }
 
@@ -468,7 +481,7 @@ internal sealed class VoiceRecognitionService : IDisposable
                 ? el.GetString() ?? ""
                 : "";
         }
-        catch
+        catch (JsonException)
         {
             return "";
         }

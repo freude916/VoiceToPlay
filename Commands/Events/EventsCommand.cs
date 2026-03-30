@@ -3,12 +3,12 @@ using MegaCrit.Sts2.Core.Nodes.Rooms;
 using VoiceToPlay.Util;
 using VoiceToPlay.Voice.Core;
 
-namespace VoiceToPlay.Commands.Event;
+namespace VoiceToPlay.Commands.Events;
 
 /// <summary>
 ///     事件选项命令。支持 "第一个选项", "第二个选项", "继续" 等。
 /// </summary>
-public sealed class EventCommand : IVoiceCommand
+public sealed class EventsCommand : IVoiceCommand
 {
     private readonly Dictionary<string, int> _wordToIndex = new();
 
@@ -17,12 +17,12 @@ public sealed class EventCommand : IVoiceCommand
     /// </summary>
     private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
 
-    public EventCommand()
+    public EventsCommand()
     {
         Instance = this;
     }
 
-    public static EventCommand? Instance { get; private set; }
+    public static EventsCommand? Instance { get; private set; }
 
     /// <summary>
     ///     只返回缓存，不做任何计算

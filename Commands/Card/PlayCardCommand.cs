@@ -49,8 +49,7 @@ public sealed class PlayCardCommand : IVoiceCommand
     {
         // Pass：overlay 打开或手牌选牌模式或牌组视图时给其他命令让路
         if (NOverlayStack.Instance?.Peek() != null) return CommandResult.Pass;
-        if (NPlayerHand.Instance?.IsInCardSelection == true) return CommandResult.Pass;
-        if (DeckViewCommand.IsOpen) return CommandResult.Pass;
+        if (NPlayerHand.Instance?.IsInCardSelection == true || DeckViewCommand.IsOpen) return CommandResult.Pass;
 
         var combatState = CombatManager.Instance?.DebugOnlyGetState();
         if (combatState == null)
@@ -117,7 +116,8 @@ public sealed class PlayCardCommand : IVoiceCommand
         var queued = matchedCard.TryManualPlay(target);
         MainFile.Logger.Debug($"PlayCardCommand: '{word}' -> queued={queued}");
 
-        // 不在这里刷新词表，由 Patch 在手牌真正变化时刷新
+        // 刷新词表，因为命令引擎派发时手牌还未真正打出完毕
+        RefreshVocabulary();
 
         return queued ? CommandResult.Success : CommandResult.Failed;
     }
@@ -148,11 +148,10 @@ public sealed class PlayCardCommand : IVoiceCommand
         if (instance == null) return;
 
         var newWords = instance.ComputeSupportedWords();
-        if (!newWords.SetEquals(instance._cachedWords))
-        {
-            instance._cachedWords = newWords;
-            instance.VocabularyChanged?.Invoke(instance);
-        }
+        if (newWords.SetEquals(instance._cachedWords)) return;
+
+        instance._cachedWords = newWords;
+        instance.VocabularyChanged?.Invoke(instance);
     }
 
     /// <summary>

@@ -1,8 +1,6 @@
 using Godot;
 using MegaCrit.Sts2.Core.Nodes;
-using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
-using VoiceToPlay.Voice;
 using VoiceToPlay.Voice.Core;
 
 namespace VoiceToPlay.Commands.GlobalUi;
@@ -39,17 +37,9 @@ public sealed class GlobalUiCommand : IVoiceCommand
             return CommandResult.Failed;
         }
 
-        try
-        {
-            action.Invoke();
-            MainFile.Logger.Info($"GlobalUiCommand: executed '{word}'");
-            return CommandResult.Success;
-        }
-        catch (Exception e)
-        {
-            MainFile.Logger.Warn($"GlobalUiCommand: failed to execute '{word}': {e.Message}");
-            return CommandResult.Failed;
-        }
+        action.Invoke();
+        MainFile.Logger.Info($"GlobalUiCommand: executed '{word}'");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;

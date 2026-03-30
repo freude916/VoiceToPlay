@@ -19,6 +19,7 @@ internal sealed class VoiceAudioCaptureService : IDisposable
 
     private readonly Node _owner;
     private readonly int _targetSampleRate;
+    private bool _isCapturing;
 
     private AudioStreamPlayer? _microphonePlayer;
 
@@ -174,6 +175,27 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         PlaybackService?.Clear();
     }
 
+    /// <summary>
+    ///     启动麦克风捕获
+    /// </summary>
+    public void StartCapture()
+    {
+        if (_isCapturing) return;
+        _microphonePlayer?.Play();
+        _isCapturing = true;
+    }
+
+    /// <summary>
+    ///     停止麦克风捕获
+    /// </summary>
+    public void StopCapture()
+    {
+        if (!_isCapturing) return;
+        _microphonePlayer?.Stop();
+        _isCapturing = false;
+        ClearTransientBuffers();
+    }
+
     private static int EnsureCaptureBus()
     {
         var busIndex = AudioServer.GetBusIndex(CaptureBusName);
@@ -302,6 +324,6 @@ internal sealed class VoiceAudioCaptureService : IDisposable
             Autoplay = false
         };
         _owner.AddChild(_microphonePlayer);
-        _microphonePlayer.Play();
+        // 不自动 Play()，等待 StartCapture() 调用
     }
 }
