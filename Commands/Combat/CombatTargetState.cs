@@ -58,7 +58,7 @@ public static class CombatTargetState
 
         _selectedEnemyRef = new WeakReference<Creature>(enemy);
         SelectedEnemyIndex = index;
-        MainFile.Logger.Info($"CombatTargetState: selected enemy index={index}");
+        MainFile.Logger.Debug($"CombatTargetState: selected enemy index={index}");
     }
 
     /// <summary>

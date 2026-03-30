@@ -6,18 +6,27 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using VoiceToPlay.Commands.Combat;
+using VoiceToPlay.Commands.DeckView;
 using VoiceToPlay.Voice;
 using VoiceToPlay.Voice.Core;
 
 namespace VoiceToPlay.Commands.Card;
 
 /// <summary>
-///     出牌命令。支持按卡名和数字索引出牌（如 "防御", "防御3"）。
+///     出牌命令。支持按卡名和数字索引出牌（如 "防御一", "防御二"）。
+///     不带数字的基础词（如 "防御"）会实时搜索首个可用的同名卡。
 /// </summary>
 public sealed class PlayCardCommand : IVoiceCommand
 {
-    // 词 → (卡牌名, occurrence)
-    private readonly Dictionary<string, (string NormalizedName, int Occurrence)> _wordToCard = new();
+    /// <summary>
+    ///     所有可用的卡牌名（用于不带数字词的实时搜索）
+    /// </summary>
+    private readonly HashSet<string> _cardNames = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     带数字后缀的词 → CardModel（如 "打击一" → CardModel）
+    /// </summary>
+    private readonly Dictionary<string, CardModel> _indexedWordToCard = new();
 
     /// <summary>
     ///     缓存的词表，SupportedWords getter 直接返回此缓存
@@ -36,24 +45,18 @@ public sealed class PlayCardCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
-        // 防御性检查：overlay 打开或手牌选牌模式时忽略
-        if (NOverlayStack.Instance?.Peek() != null) return;
-        if (NPlayerHand.Instance?.IsInCardSelection == true) return;
+        // Pass：overlay 打开或手牌选牌模式或牌组视图时给其他命令让路
+        if (NOverlayStack.Instance?.Peek() != null) return CommandResult.Pass;
+        if (NPlayerHand.Instance?.IsInCardSelection == true) return CommandResult.Pass;
+        if (DeckViewCommand.IsOpen) return CommandResult.Pass;
 
-        if (!_wordToCard.TryGetValue(word, out var info))
-        {
-            MainFile.Logger.Warn($"PlayCardCommand: word '{word}' not found");
-            return;
-        }
-
-        var (normalizedCardName, occurrence) = info;
         var combatState = CombatManager.Instance?.DebugOnlyGetState();
         if (combatState == null)
         {
             MainFile.Logger.Warn("PlayCardCommand: combat not active");
-            return;
+            return CommandResult.Failed;
         }
 
         var player = LocalContext.GetMe(combatState);
@@ -61,35 +64,43 @@ public sealed class PlayCardCommand : IVoiceCommand
         if (hand == null)
         {
             MainFile.Logger.Warn("PlayCardCommand: hand is null");
-            return;
+            return CommandResult.Failed;
         }
 
-        // 查找第 occurrence 张同名卡
         CardModel? matchedCard = null;
-        var matchedCount = 0;
-        foreach (var card in hand)
-        {
-            var name = VoiceText.Normalize(VoiceText.GetCardCommandName(card));
-            if (name != normalizedCardName) continue;
 
-            matchedCount++;
-            if (matchedCount == occurrence)
+        // 尝试匹配带数字后缀的词
+        if (_indexedWordToCard.TryGetValue(word, out var cachedCard))
+        {
+            // 验证卡牌仍在手牌中
+            if (!hand.Contains(cachedCard))
             {
-                matchedCard = card;
-                break;
+                MainFile.Logger.Warn($"PlayCardCommand: cached card for '{word}' no longer in hand");
+                return CommandResult.Failed;
+            }
+
+            matchedCard = cachedCard;
+        }
+        // 尝试匹配不带数字的基础词（实时搜索首个可用的同名卡）
+        else if (_cardNames.Contains(word))
+        {
+            matchedCard = FindFirstAvailableCard(word, hand);
+            if (matchedCard == null)
+            {
+                MainFile.Logger.Info($"PlayCardCommand: no available card for '{word}'");
+                return CommandResult.Failed;
             }
         }
-
-        if (matchedCard == null)
+        else
         {
-            MainFile.Logger.Warn($"PlayCardCommand: card '{normalizedCardName}' occurrence {occurrence} not found");
-            return;
+            MainFile.Logger.Warn($"PlayCardCommand: word '{word}' not found");
+            return CommandResult.Failed;
         }
 
         if (!matchedCard.CanPlay(out _, out _))
         {
-            MainFile.Logger.Info($"PlayCardCommand: card '{normalizedCardName}' cannot be played now");
-            return;
+            MainFile.Logger.Info("PlayCardCommand: card cannot be played now");
+            return CommandResult.Failed;
         }
 
         // 解析目标
@@ -99,19 +110,34 @@ public sealed class PlayCardCommand : IVoiceCommand
         var needsTarget = matchedCard.TargetType is TargetType.AnyEnemy or TargetType.AnyAlly;
         if (needsTarget && !matchedCard.IsValidTarget(target))
         {
-            MainFile.Logger.Info($"PlayCardCommand: invalid target for '{normalizedCardName}'");
-            return;
+            MainFile.Logger.Info("PlayCardCommand: invalid target");
+            return CommandResult.Failed;
         }
 
         var queued = matchedCard.TryManualPlay(target);
-        MainFile.Logger.Info($"PlayCardCommand: '{word}' -> {normalizedCardName}#{occurrence}, queued={queued}");
-        
-        // 立即刷新词表，避免同一张卡被重复使用
-        if (queued)
-            RefreshVocabulary();
+        MainFile.Logger.Debug($"PlayCardCommand: '{word}' -> queued={queued}");
+
+        // 不在这里刷新词表，由 Patch 在手牌真正变化时刷新
+
+        return queued ? CommandResult.Success : CommandResult.Failed;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
+
+    /// <summary>
+    ///     查找首个可用的同名卡
+    /// </summary>
+    private static CardModel? FindFirstAvailableCard(string normalizedCardName, IEnumerable<CardModel> hand)
+    {
+        foreach (var card in hand)
+        {
+            var name = VoiceText.Normalize(VoiceText.GetCardCommandName(card));
+            if (name == normalizedCardName)
+                return card;
+        }
+
+        return null;
+    }
 
     /// <summary>
     ///     刷新词表缓存，由 Patch 调用
@@ -134,7 +160,8 @@ public sealed class PlayCardCommand : IVoiceCommand
     /// </summary>
     private HashSet<string> ComputeSupportedWords()
     {
-        _wordToCard.Clear();
+        _indexedWordToCard.Clear();
+        _cardNames.Clear();
 
         // 如果在手牌选牌模式（消耗/升级等），禁用出牌命令
         if (NPlayerHand.Instance?.IsInCardSelection == true) return [];
@@ -149,39 +176,26 @@ public sealed class PlayCardCommand : IVoiceCommand
         var hand = player?.PlayerCombatState?.Hand?.Cards;
         if (hand == null) return [];
 
-        // 统计每张卡的出现次数
-        var cardCountByName = new Dictionary<string, int>(StringComparer.Ordinal);
-        var cardsByName = new Dictionary<string, List<CardModel>>(StringComparer.Ordinal);
+        // 使用 CardIndexedCommandCatalog 生成带数字后缀的词表
+        foreach (var kvp in CardIndexedCommandCatalog.BuildWordToCard(hand))
+            _indexedWordToCard[kvp.Key] = kvp.Value;
 
+        // 收集所有卡牌名（用于不带数字词）
         foreach (var card in hand)
         {
             var normalizedName = VoiceText.Normalize(VoiceText.GetCardCommandName(card));
-            if (string.IsNullOrEmpty(normalizedName)) continue;
-
-            if (!cardsByName.TryGetValue(normalizedName, out var list))
-                cardsByName[normalizedName] = list = [];
-            list.Add(card);
-
-            cardCountByName.TryGetValue(normalizedName, out var count);
-            cardCountByName[normalizedName] = count + 1;
+            if (!string.IsNullOrEmpty(normalizedName))
+                _cardNames.Add(normalizedName);
         }
 
-        // 按卡名长度降序（优先匹配长名）
-        var sortedNames = cardsByName.Keys.OrderByDescending(n => n).ToList();
+        // 合并词表：带数字后缀的词 + 基础卡牌名
+        var allWords = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in _indexedWordToCard.Keys)
+            allWords.Add(word);
+        foreach (var name in _cardNames)
+            allWords.Add(name);
 
-        foreach (var normalizedName in sortedNames)
-        {
-            var count = cardCountByName[normalizedName];
-
-            // 使用 CardIndexedCommandCatalog 生成带中文数字后缀的词表
-            foreach (var word in CardIndexedCommandCatalog.EnumerateIndexedCommands(normalizedName))
-                if (CardIndexedCommandCatalog.TryParseOccurrence(word, normalizedName, out var occurrence))
-                    // 只生成实际存在的数量
-                    if (occurrence <= count)
-                        _wordToCard[word] = (normalizedName, occurrence);
-        }
-
-        return new HashSet<string>(_wordToCard.Keys, StringComparer.Ordinal);
+        return allWords;
     }
 
     private static Creature? ResolveTarget(CardModel card, CombatState combatState)
@@ -190,7 +204,7 @@ public sealed class PlayCardCommand : IVoiceCommand
         {
             TargetType.AnyEnemy => ResolveAnyEnemy(combatState),
             TargetType.AnyAlly => ResolveAnyAlly(card, combatState),
-            _ => null  // 无目标牌不需要 target
+            _ => null // 无目标牌不需要 target
         };
     }
 

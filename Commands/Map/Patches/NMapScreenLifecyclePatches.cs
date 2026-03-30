@@ -13,13 +13,13 @@ internal static class NMapScreenLifecyclePatches
     {
         __instance.Opened += () =>
         {
-            MainFile.Logger.Info("NMapScreen.Opened, refreshing vocabulary");
+            MainFile.Logger.Debug("NMapScreen.Opened, refreshing vocabulary");
             MapCommand.RefreshVocabulary();
         };
 
         __instance.Closed += () =>
         {
-            MainFile.Logger.Info("NMapScreen.Closed, clearing vocabulary");
+            MainFile.Logger.Debug("NMapScreen.Closed, clearing vocabulary");
             MapCommand.RefreshVocabulary();
         };
     }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using Godot;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Screens;
@@ -39,16 +38,17 @@ public sealed class RewardsCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToAction.TryGetValue(word, out var action))
         {
             MainFile.Logger.Warn($"RewardsCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
         var success = action();
-        MainFile.Logger.Info($"RewardsCommand: '{word}' executed, success={success}");
+        MainFile.Logger.Debug($"RewardsCommand: '{word}' executed, success={success}");
+        return success ? CommandResult.Success : CommandResult.Failed;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -82,7 +82,6 @@ public sealed class RewardsCommand : IVoiceCommand
                     if (!GodotObject.IsInstanceValid(capturedButton)) return false;
                     capturedButton.ForceClick();
                     return true;
-
                 };
 
                 if (cardRewardIndex == 1)
@@ -96,7 +95,7 @@ public sealed class RewardsCommand : IVoiceCommand
                         return true;
                     };
                 }
-                
+
                 continue;
             }
 

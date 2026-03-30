@@ -24,17 +24,18 @@ public sealed class ConfirmCommand : IVoiceCommand
 
     public IEnumerable<string> SupportedWords => HasActiveButton() ? _words : [];
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         var button = _activeButton;
         if (button == null || !IsButtonValid(button))
         {
             MainFile.Logger.Warn("ConfirmCommand: no active confirm button");
-            return;
+            return CommandResult.Failed;
         }
 
         button.ForceClick();
         MainFile.Logger.Info($"ConfirmCommand: '{word}' clicked");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -45,7 +46,7 @@ public sealed class ConfirmCommand : IVoiceCommand
     public static void RegisterButton(NConfirmButton button)
     {
         _activeButton = button;
-        MainFile.Logger.Info($"ConfirmCommand: registered button");
+        MainFile.Logger.Debug("ConfirmCommand: registered button");
         RefreshVocabulary();
     }
 
@@ -55,7 +56,7 @@ public sealed class ConfirmCommand : IVoiceCommand
     public static void UnregisterButton()
     {
         _activeButton = null;
-        MainFile.Logger.Info("ConfirmCommand: unregistered button");
+        MainFile.Logger.Debug("ConfirmCommand: unregistered button");
         RefreshVocabulary();
     }
 

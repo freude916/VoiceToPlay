@@ -56,7 +56,8 @@ public sealed class VoiceCommandEngine
     {
         RebuildWordToCommandsMap();
         var words = GetAllWords();
-        MainFile.Logger.Info($"VoiceCommandEngine: received VocabularyChanged from {cmd.GetType().Name}, now {words.Count} words");
+        MainFile.Logger.Debug(
+            $"VoiceCommandEngine: received VocabularyChanged from {cmd.GetType().Name}, now {words.Count} words");
         VocabularyUpdated?.Invoke(words);
     }
 
@@ -93,9 +94,35 @@ public sealed class VoiceCommandEngine
         ArgumentNullException.ThrowIfNull(text);
         var words = SplitWords(text);
         foreach (var word in words)
-            if (!string.IsNullOrWhiteSpace(word) && _wordToCommands.TryGetValue(word, out var commands))
-                foreach (var cmd in commands)
-                    cmd.Execute(word);
+        {
+            if (string.IsNullOrWhiteSpace(word)) continue;
+
+            if (!_wordToCommands.TryGetValue(word, out var commands))
+            {
+                // 词不存在于任何命令的词表中，识别结果有错误，停止执行
+                MainFile.Logger.Warn($"VoiceCommandEngine: word '{word}' not found in any command, stopping");
+                break;
+            }
+
+            // 执行所有对应的命令，收集结果
+            var results = commands.Select(cmd => cmd.Execute(word)).ToList();
+
+            // 所有命令都 Pass：用户操作有问题，停止执行
+            if (results.All(r => r == CommandResult.Pass))
+            {
+                MainFile.Logger.Info($"VoiceCommandEngine: all commands passed for word '{word}', stopping");
+                break;
+            }
+
+            // 有任何命令 Failed：停止执行
+            if (results.Any(r => r == CommandResult.Failed))
+            {
+                MainFile.Logger.Info($"VoiceCommandEngine: command failed for word '{word}', stopping");
+                break;
+            }
+
+            // 有 Success：继续下一个词
+        }
     }
 
     /// <summary>

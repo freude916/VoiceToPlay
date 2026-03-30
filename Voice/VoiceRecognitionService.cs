@@ -38,12 +38,12 @@ internal sealed class VoiceRecognitionService : IDisposable
 
     // 结果队列 (后台线程 -> 主线程)
     private readonly ConcurrentQueue<RecognitionResult> _resultQueue = new();
-    private string _lastPartialText = string.Empty;  // 主线程用
-    private string _lastPublishedText = string.Empty;
+    private DateTime _lastPartialChangeTime = DateTime.UtcNow;
+    private string _lastPartialText = string.Empty; // 主线程用
 
     // Partial 超时检测（后台线程专用，无需锁）
     private string _lastPartialTextInThread = string.Empty;
-    private DateTime _lastPartialChangeTime = DateTime.UtcNow;
+    private string _lastPublishedText = string.Empty;
 
     // 状态
     private bool _listeningEnabled = true;
@@ -77,6 +77,26 @@ internal sealed class VoiceRecognitionService : IDisposable
     ///     当前输入设备名称
     /// </summary>
     public static string CurrentInputDevice => VoiceAudioCaptureService.CurrentInputDevice;
+
+    public void Dispose()
+    {
+        _running = false;
+
+        // 清空引用，防止后台线程继续使用
+        lock (_recognizerLock)
+        {
+            _recognizer = null;
+        }
+
+        _audioQueue.CompleteAdding();
+
+        // 不 Dispose _model 和 _recognizer，因为：
+        // 1. 后台线程可能还在用
+        // 2. 进程退出时 OS 会自动回收
+        // 如果需要重新初始化，OnVocabularyUpdated 会重建
+
+        _audioCapture.Dispose();
+    }
 
     /// <summary>
     ///     设置音频效果参数
@@ -115,33 +135,12 @@ internal sealed class VoiceRecognitionService : IDisposable
             var fromHz = MathF.Exp(logMin + i * logStep);
             var toHz = MathF.Exp(logMin + (i + 1) * logStep);
             var magnitude = spectrumInstance.GetMagnitudeForFrequencyRange(
-                fromHz, toHz,
-                AudioEffectSpectrumAnalyzerInstance.MagnitudeMode.Max);
+                fromHz, toHz);
             // 取左右声道最大值
             result[i] = MathF.Max(magnitude.X, magnitude.Y);
         }
 
         return result;
-    }
-
-    public void Dispose()
-    {
-        _running = false;
-
-        // 清空引用，防止后台线程继续使用
-        lock (_recognizerLock)
-        {
-            _recognizer = null;
-        }
-
-        _audioQueue.CompleteAdding();
-
-        // 不 Dispose _model 和 _recognizer，因为：
-        // 1. 后台线程可能还在用
-        // 2. 进程退出时 OS 会自动回收
-        // 如果需要重新初始化，OnVocabularyUpdated 会重建
-
-        _audioCapture.Dispose();
     }
 
     /// <summary>
@@ -206,7 +205,7 @@ internal sealed class VoiceRecognitionService : IDisposable
         MainFile.Logger.Info($"Voice listening: {(enabled ? "enabled" : "disabled")}");
 
         if (enabled) return;
-        
+
         LastPeakAmplitude = 0f;
         _lastPartialText = string.Empty;
         PublishRecognitionText(string.Empty, true);
@@ -290,7 +289,6 @@ internal sealed class VoiceRecognitionService : IDisposable
     private void ProcessResults()
     {
         while (_resultQueue.TryDequeue(out var result))
-        {
             if (result.IsFinal)
             {
                 var text = ExtractText(result.Json);
@@ -313,7 +311,6 @@ internal sealed class VoiceRecognitionService : IDisposable
                 _lastPartialText = partial;
                 PublishRecognitionText(partial);
             }
-        }
     }
 
     private void StartRecognitionThread()
@@ -329,7 +326,7 @@ internal sealed class VoiceRecognitionService : IDisposable
 
     private void RecognitionLoop()
     {
-        MainFile.Logger.Info("Voice recognition thread started");
+        MainFile.Logger.Debug("Voice recognition thread started");
 
         try
         {
@@ -343,7 +340,7 @@ internal sealed class VoiceRecognitionService : IDisposable
                     (now - _lastPartialChangeTime).TotalSeconds > PartialTimeoutSeconds)
                 {
                     if (DebugRecognition)
-                        MainFile.Logger.Info($"[DEBUG] Partial timeout, clearing: '{_lastPartialTextInThread}'");
+                        MainFile.Logger.Debug($"Partial timeout, clearing: '{_lastPartialTextInThread}'");
                     _lastPartialTextInThread = string.Empty;
                     _resultQueue.Enqueue(new RecognitionResult("{\"partial\":\"\"}", false));
                 }
@@ -384,7 +381,7 @@ internal sealed class VoiceRecognitionService : IDisposable
             MainFile.Logger.Error($"Voice recognition thread error: {ex}");
         }
 
-        MainFile.Logger.Info("Voice recognition thread stopped");
+        MainFile.Logger.Debug("Voice recognition thread stopped");
     }
 
     private void ClearAudioQueue()
@@ -406,7 +403,7 @@ internal sealed class VoiceRecognitionService : IDisposable
         var grammarJson = _grammarSession.BuildGrammarJson(words);
         if (string.IsNullOrEmpty(grammarJson))
         {
-            MainFile.Logger.Info("VoiceRecognitionService: grammar unchanged, skip update");
+            MainFile.Logger.Debug("VoiceRecognitionService: grammar unchanged, skip update");
             return;
         }
 

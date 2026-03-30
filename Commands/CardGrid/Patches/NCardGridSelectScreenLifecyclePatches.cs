@@ -11,7 +11,7 @@ internal static class NCardGridSelectionScreenShownPatch
 {
     private static void Postfix(NCardGridSelectionScreen __instance)
     {
-        MainFile.Logger.Info("NCardGridSelectionScreen.AfterOverlayShown, refreshing vocabulary");
+        MainFile.Logger.Debug("NCardGridSelectionScreen.AfterOverlayShown, refreshing vocabulary");
         CardGridSelectCommand.RefreshVocabulary();
     }
 }
@@ -21,7 +21,7 @@ internal static class NCardGridSelectionScreenClosedPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NCardGridSelectionScreen.AfterOverlayClosed, clearing vocabulary");
+        MainFile.Logger.Debug("NCardGridSelectionScreen.AfterOverlayClosed, clearing vocabulary");
         CardGridSelectCommand.ClearVocabulary();
     }
 }

@@ -27,38 +27,39 @@ public sealed class SelectEnemyCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToIndex.TryGetValue(word, out var index))
         {
             MainFile.Logger.Warn($"SelectEnemyCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
         var combatState = CombatManager.Instance?.DebugOnlyGetState();
         if (combatState == null)
         {
             MainFile.Logger.Warn("SelectEnemyCommand: combat not active");
-            return;
+            return CommandResult.Failed;
         }
 
         var hittableEnemies = combatState.HittableEnemies;
         if (index < 1 || index > hittableEnemies.Count)
         {
             MainFile.Logger.Warn($"SelectEnemyCommand: invalid index {index}, enemies={hittableEnemies.Count}");
-            return;
+            return CommandResult.Failed;
         }
 
         var enemy = hittableEnemies[index - 1];
         if (enemy == null || !enemy.IsAlive)
         {
             MainFile.Logger.Warn($"SelectEnemyCommand: enemy at index {index} is not valid");
-            return;
+            return CommandResult.Failed;
         }
 
         // 存储选中状态并显示准星
         CombatTargetState.SetSelectedEnemy(index, enemy);
-        MainFile.Logger.Info($"SelectEnemyCommand: selected enemy {index}/{hittableEnemies.Count}");
+        MainFile.Logger.Debug($"SelectEnemyCommand: selected enemy {index}/{hittableEnemies.Count}");
+        return CommandResult.Success;
     }
 
     // 静态词表，不需要事件

@@ -30,22 +30,23 @@ public sealed class RestSiteCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToButton.TryGetValue(word, out var button))
         {
             MainFile.Logger.Warn($"RestSiteCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
         if (!GodotObject.IsInstanceValid(button) || !button.IsInsideTree())
         {
             MainFile.Logger.Warn("RestSiteCommand: button is invalid");
-            return;
+            return CommandResult.Failed;
         }
 
         button.ForceClick();
-        MainFile.Logger.Info($"RestSiteCommand: '{word}' -> clicked");
+        MainFile.Logger.Debug($"RestSiteCommand: '{word}' -> clicked");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;

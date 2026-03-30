@@ -21,10 +21,11 @@ public abstract class CachedVoiceCommand<TTarget> : IVoiceCommand
         }
     }
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (WordToTarget.TryGetValue(word, out var target))
-            ExecuteTarget(target);
+            return ExecuteTarget(target);
+        return CommandResult.Pass;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -37,7 +38,7 @@ public abstract class CachedVoiceCommand<TTarget> : IVoiceCommand
     /// <summary>
     ///     子类实现：执行目标
     /// </summary>
-    protected abstract void ExecuteTarget(TTarget target);
+    protected abstract CommandResult ExecuteTarget(TTarget target);
 
     /// <summary>
     ///     便捷方法：触发词表变化通知

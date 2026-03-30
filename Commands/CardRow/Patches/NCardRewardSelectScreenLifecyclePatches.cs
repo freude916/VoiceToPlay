@@ -11,7 +11,7 @@ internal static class NCardRewardSelectionScreenShownPatch
 {
     private static void Postfix(NCardRewardSelectionScreen __instance)
     {
-        MainFile.Logger.Info("NCardRewardSelectionScreen.AfterOverlayShown, refreshing vocabulary");
+        MainFile.Logger.Debug("NCardRewardSelectionScreen.AfterOverlayShown, refreshing vocabulary");
         CardRowSelectCommand.RefreshVocabulary();
     }
 }
@@ -21,7 +21,7 @@ internal static class NCardRewardSelectionScreenClosedPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NCardRewardSelectionScreen.AfterOverlayClosed, clearing vocabulary");
+        MainFile.Logger.Debug("NCardRewardSelectionScreen.AfterOverlayClosed, clearing vocabulary");
         CardRowSelectCommand.ClearVocabulary();
     }
 }
@@ -34,7 +34,7 @@ internal static class NChooseACardSelectionScreenShownPatch
 {
     private static void Postfix(NChooseACardSelectionScreen __instance)
     {
-        MainFile.Logger.Info("NChooseACardSelectionScreen.AfterOverlayShown, refreshing vocabulary");
+        MainFile.Logger.Debug("NChooseACardSelectionScreen.AfterOverlayShown, refreshing vocabulary");
         CardRowSelectCommand.RefreshVocabulary();
     }
 }
@@ -44,7 +44,7 @@ internal static class NChooseACardSelectionScreenClosedPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NChooseACardSelectionScreen.AfterOverlayClosed, clearing vocabulary");
+        MainFile.Logger.Debug("NChooseACardSelectionScreen.AfterOverlayClosed, clearing vocabulary");
         CardRowSelectCommand.ClearVocabulary();
     }
 }

@@ -118,21 +118,21 @@
     <ItemGroup>
         <Content Include="AGENTS.md"/>
         <Content Include="Directory.Build.props"/>
-        <Content Include="docs\COMMANDS.md" />
-        <Content Include="docs\filter_words\extract_vocab.py" />
-        <Content Include="docs\filter_words\NOTES.md" />
-        <Content Include="docs\filter_words\small_model_words.txt" />
-        <Content Include="jieba\Resources\char_state_tab.json" />
-        <Content Include="jieba\Resources\cn_synonym.txt" />
-        <Content Include="jieba\Resources\dict.txt" />
-        <Content Include="jieba\Resources\idf.txt" />
-        <Content Include="jieba\Resources\pos_prob_emit.json" />
-        <Content Include="jieba\Resources\pos_prob_start.json" />
-        <Content Include="jieba\Resources\pos_prob_trans.json" />
-        <Content Include="jieba\Resources\prob_emit.json" />
-        <Content Include="jieba\Resources\prob_trans.json" />
-        <Content Include="jieba\Resources\stopwords.txt" />
-        <Content Include="Plan.md" />
+        <Content Include="docs\COMMANDS.md"/>
+        <Content Include="docs\filter_words\extract_vocab.py"/>
+        <Content Include="docs\filter_words\NOTES.md"/>
+        <Content Include="docs\filter_words\small_model_words.txt"/>
+        <Content Include="jieba\Resources\char_state_tab.json"/>
+        <Content Include="jieba\Resources\cn_synonym.txt"/>
+        <Content Include="jieba\Resources\dict.txt"/>
+        <Content Include="jieba\Resources\idf.txt"/>
+        <Content Include="jieba\Resources\pos_prob_emit.json"/>
+        <Content Include="jieba\Resources\pos_prob_start.json"/>
+        <Content Include="jieba\Resources\pos_prob_trans.json"/>
+        <Content Include="jieba\Resources\prob_emit.json"/>
+        <Content Include="jieba\Resources\prob_trans.json"/>
+        <Content Include="jieba\Resources\stopwords.txt"/>
+        <Content Include="Plan.md"/>
         <Content Include="Voice\ARCHITECTURE.md"/>
         <Content Include="Voice\SNIPPETS.md"/>
     </ItemGroup>

@@ -12,7 +12,7 @@ internal static class NRestSiteRoomReadyPatch
 {
     private static void Postfix(NRestSiteRoom __instance)
     {
-        MainFile.Logger.Info("NRestSiteRoom._Ready, refreshing vocabulary");
+        MainFile.Logger.Debug("NRestSiteRoom._Ready, refreshing vocabulary");
         RestSiteCommand.RefreshVocabulary();
     }
 }
@@ -22,7 +22,7 @@ internal static class NRestSiteRoomExitPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NRestSiteRoom._ExitTree, clearing vocabulary");
+        MainFile.Logger.Debug("NRestSiteRoom._ExitTree, clearing vocabulary");
         RestSiteCommand.ClearVocabulary();
     }
 }

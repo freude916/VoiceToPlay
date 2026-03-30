@@ -1,8 +1,12 @@
 using Godot;
+using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using VoiceToPlay.Commands.Card;
+using VoiceToPlay.Commands.DeckView;
+using VoiceToPlay.Util;
 using VoiceToPlay.Voice;
 using VoiceToPlay.Voice.Core;
 
@@ -15,22 +19,35 @@ public sealed class CardGridSelectCommand : IVoiceCommand
 {
     private const float ScrollStep = 420f;
 
-    private static readonly Dictionary<int, string> ChineseNumbers = new()
-    {
-        [1] = "一", [2] = "二", [3] = "三", [4] = "四", [5] = "五",
-        [6] = "六", [7] = "七", [8] = "八", [9] = "九"
-    };
-
     private static readonly string[] ScrollUpWords = ["向上滚", "上滚"];
     private static readonly string[] ScrollDownWords = ["向下滚", "下滚"];
 
-    private readonly Dictionary<string, object> _wordToTarget = new(); // NGridCardHolder 或 "scroll_up" / "scroll_down"
-    private NCardGrid? _lastCardGrid;
+    /// <summary>
+    ///     卡牌名 → 首个 holder（用于不带数字词）
+    /// </summary>
+    private readonly Dictionary<string, NGridCardHolder> _cardNameToFirstHolder = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     带数字后缀的词 → NGridCardHolder
+    /// </summary>
+    private readonly Dictionary<string, NGridCardHolder> _indexedWordToHolder = new();
+
+    /// <summary>
+    ///     序号词 → holder（第一张、第二张...）
+    /// </summary>
+    private readonly Dictionary<string, NGridCardHolder> _indexWordToHolder = new(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     滚动词
+    /// </summary>
+    private readonly HashSet<string> _scrollWords = new(StringComparer.Ordinal);
 
     /// <summary>
     ///     缓存的词表，SupportedWords getter 直接返回此缓存
     /// </summary>
     private HashSet<string> _cachedWords = new(StringComparer.Ordinal);
+
+    private NCardGrid? _lastCardGrid;
 
     public CardGridSelectCommand()
     {
@@ -44,40 +61,55 @@ public sealed class CardGridSelectCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
-        if (!_wordToTarget.TryGetValue(word, out var target))
+        // Pass：牌组视图打开时让路
+        if (DeckViewCommand.IsOpen) return CommandResult.Pass;
+
+        // 检查滚动词
+        if (_scrollWords.Contains(word))
+        {
+            var delta = ScrollUpWords.Contains(word) ? -ScrollStep : ScrollStep;
+            Scroll(delta);
+            return CommandResult.Success;
+        }
+
+        NGridCardHolder? holder = null;
+
+        // 尝试匹配带数字后缀的词
+        if (_indexedWordToHolder.TryGetValue(word, out var cachedHolder))
+        {
+            holder = cachedHolder;
+        }
+        // 尝试匹配不带数字的基础词
+        else if (_cardNameToFirstHolder.TryGetValue(word, out var firstHolder))
+        {
+            holder = firstHolder;
+        }
+        // 尝试匹配序号词
+        else if (_indexWordToHolder.TryGetValue(word, out var indexHolder))
+        {
+            holder = indexHolder;
+        }
+        else
         {
             MainFile.Logger.Warn($"CardGridSelectionCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
-        switch (target)
+        // 验证 holder 有效性
+        if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
         {
-            case NGridCardHolder holder:
-                if (!GodotObject.IsInstanceValid(holder))
-                {
-                    MainFile.Logger.Warn("CardGridSelectionCommand: holder is invalid");
-                    return;
-                }
-
-                holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
-                MainFile.Logger.Info($"CardGridSelectionCommand: '{word}' -> selected card");
-                break;
-
-            case "scroll_up":
-                Scroll(-ScrollStep);
-                break;
-
-            case "scroll_down":
-                Scroll(ScrollStep);
-                break;
-
-            default:
-                MainFile.Logger.Warn($"CardGridSelectionCommand: unknown target type {target?.GetType()}");
-                break;
+            MainFile.Logger.Warn("CardGridSelectionCommand: holder is invalid");
+            return CommandResult.Failed;
         }
+
+        holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
+        MainFile.Logger.Debug($"CardGridSelectionCommand: '{word}' -> selected card");
+        return CommandResult.Success;
     }
+
+    public event Action<IVoiceCommand>? VocabularyChanged;
 
     private void Scroll(float delta)
     {
@@ -98,17 +130,18 @@ public sealed class CardGridSelectCommand : IVoiceCommand
         var from = scrollContainer.Position.Y;
         var to = from + delta;
         cardGrid.SetScrollPosition(to);
-        MainFile.Logger.Info($"CardGridSelectionCommand: scrolled from {from:F1} to {to:F1}");
+        MainFile.Logger.Debug($"CardGridSelectionCommand: scrolled from {from:F1} to {to:F1}");
     }
-
-    public event Action<IVoiceCommand>? VocabularyChanged;
 
     /// <summary>
     ///     计算当前支持的词表（只在 RefreshVocabulary 中调用）
     /// </summary>
     private HashSet<string> ComputeSupportedWords()
     {
-        _wordToTarget.Clear();
+        _indexedWordToHolder.Clear();
+        _cardNameToFirstHolder.Clear();
+        _indexWordToHolder.Clear();
+        _scrollWords.Clear();
         _lastCardGrid = null;
 
         var screen = NOverlayStack.Instance?.Peek() as NCardGridSelectionScreen;
@@ -120,67 +153,71 @@ public sealed class CardGridSelectCommand : IVoiceCommand
         _lastCardGrid = cardGrid;
 
         var holders = cardGrid.CurrentlyDisplayedCardHolders;
-        var cardNameCounts = new Dictionary<string, int>(StringComparer.Ordinal);
-        var holdersByName = new Dictionary<string, List<NGridCardHolder>>(StringComparer.Ordinal);
 
-        // 统计卡牌名
+        // 收集有效的 holder 和对应的 cardModel
+        var validHolders = new List<(NGridCardHolder Holder, CardModel CardModel)>();
         foreach (var holder in holders)
         {
             if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
                 continue;
-
             var cardModel = holder.CardModel;
             if (cardModel == null) continue;
-
-            var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
-            if (string.IsNullOrEmpty(cardName)) continue;
-
-            if (!holdersByName.TryGetValue(cardName, out var list))
-                holdersByName[cardName] = list = [];
-            list.Add(holder);
-
-            cardNameCounts.TryGetValue(cardName, out var count);
-            cardNameCounts[cardName] = count + 1;
+            validHolders.Add((holder, cardModel));
         }
 
-        // 生成词表
-        var index = 0;
-        foreach (var holder in holders)
+        if (validHolders.Count == 0) return [];
+
+        // 构建 CardModel → Holder 映射
+        var cardToHolder = new Dictionary<CardModel, NGridCardHolder>();
+        foreach (var (holder, cardModel) in validHolders)
+            cardToHolder[cardModel] = holder;
+
+        // 使用 CardIndexedCommandCatalog 生成带数字后缀的词表
+        var cardModels = validHolders.Select(h => h.CardModel);
+        var wordToCard = CardIndexedCommandCatalog.BuildWordToCard(cardModels);
+
+        // 映射回 holder
+        foreach (var kvp in wordToCard)
         {
-            if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree() || !holder.Visible)
-                continue;
+            var cardModel = kvp.Value;
+            if (cardToHolder.TryGetValue(cardModel, out var holder))
+                _indexedWordToHolder[kvp.Key] = holder;
+        }
 
-            var cardModel = holder.CardModel;
-            if (cardModel == null) continue;
+        // 收集基础卡牌名 → 首个 holder
+        foreach (var (holder, cardModel) in validHolders)
+        {
+            var normalizedName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
+            if (string.IsNullOrEmpty(normalizedName)) continue;
+            if (!_cardNameToFirstHolder.ContainsKey(normalizedName))
+                _cardNameToFirstHolder[normalizedName] = holder;
+        }
 
-            var cardName = VoiceText.Normalize(VoiceText.GetCardCommandName(cardModel));
-            if (string.IsNullOrEmpty(cardName)) continue;
-
-            index++;
-
-            // 序号词
-            var indexWord = $"第{ChineseNumbers.GetValueOrDefault(index, index.ToString())}张";
-            _wordToTarget[indexWord] = holder;
-
-            // 卡牌名（重复时加序号）
-            if (cardNameCounts.GetValueOrDefault(cardName) > 1)
-            {
-                var namedWord = $"{cardName}{ChineseNumbers.GetValueOrDefault(index, index.ToString())}";
-                _wordToTarget[namedWord] = holder;
-            }
-            else
-            {
-                _wordToTarget[cardName] = holder;
-            }
+        // 序号词（第一张、第二张...）
+        for (var i = 0; i < validHolders.Count; i++)
+        {
+            var indexWord = L10n.CardOrdinal(i + 1);
+            _indexWordToHolder[indexWord] = validHolders[i].Holder;
         }
 
         // 滚动词
         foreach (var word in ScrollUpWords)
-            _wordToTarget[word] = "scroll_up";
+            _scrollWords.Add(word);
         foreach (var word in ScrollDownWords)
-            _wordToTarget[word] = "scroll_down";
+            _scrollWords.Add(word);
 
-        return new HashSet<string>(_wordToTarget.Keys, StringComparer.Ordinal);
+        // 合并词表
+        var allWords = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var word in _indexedWordToHolder.Keys)
+            allWords.Add(word);
+        foreach (var name in _cardNameToFirstHolder.Keys)
+            allWords.Add(name);
+        foreach (var word in _indexWordToHolder.Keys)
+            allWords.Add(word);
+        foreach (var word in _scrollWords)
+            allWords.Add(word);
+
+        return allWords;
     }
 
     /// <summary>
@@ -204,7 +241,10 @@ public sealed class CardGridSelectCommand : IVoiceCommand
         var instance = Instance;
         if (instance == null) return;
 
-        instance._wordToTarget.Clear();
+        instance._indexedWordToHolder.Clear();
+        instance._cardNameToFirstHolder.Clear();
+        instance._indexWordToHolder.Clear();
+        instance._scrollWords.Clear();
         instance._lastCardGrid = null;
         if (instance._cachedWords.Count > 0)
         {

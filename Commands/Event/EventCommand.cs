@@ -1,5 +1,6 @@
-using MegaCrit.Sts2.Core.Nodes.Events;
+using Godot;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
+using VoiceToPlay.Util;
 using VoiceToPlay.Voice.Core;
 
 namespace VoiceToPlay.Commands.Event;
@@ -9,12 +10,6 @@ namespace VoiceToPlay.Commands.Event;
 /// </summary>
 public sealed class EventCommand : IVoiceCommand
 {
-    private static readonly Dictionary<int, string> ChineseNumbers = new()
-    {
-        [1] = "一", [2] = "二", [3] = "三", [4] = "四", [5] = "五",
-        [6] = "六", [7] = "七", [8] = "八", [9] = "九"
-    };
-
     private readonly Dictionary<string, int> _wordToIndex = new();
 
     /// <summary>
@@ -34,50 +29,51 @@ public sealed class EventCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToIndex.TryGetValue(word, out var index))
         {
             MainFile.Logger.Warn($"EventCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
         var eventRoom = NEventRoom.Instance;
         if (eventRoom == null)
         {
             MainFile.Logger.Warn("EventCommand: NEventRoom.Instance is null");
-            return;
+            return CommandResult.Failed;
         }
 
         var layout = eventRoom.Layout;
         if (layout == null)
         {
             MainFile.Logger.Warn("EventCommand: Layout is null");
-            return;
+            return CommandResult.Failed;
         }
 
         var buttons = layout.OptionButtons.ToList();
         if (index < 0 || index >= buttons.Count)
         {
             MainFile.Logger.Warn($"EventCommand: invalid index {index}, count={buttons.Count}");
-            return;
+            return CommandResult.Failed;
         }
 
         var button = buttons[index];
-        if (!Godot.GodotObject.IsInstanceValid(button) || !button.IsInsideTree())
+        if (!GodotObject.IsInstanceValid(button) || !button.IsInsideTree())
         {
             MainFile.Logger.Warn("EventCommand: button is not valid");
-            return;
+            return CommandResult.Failed;
         }
 
         if (!button.IsEnabled)
         {
             MainFile.Logger.Warn($"EventCommand: button is not enabled, index={index}");
-            return;
+            return CommandResult.Failed;
         }
 
         button.ForceClick();
-        MainFile.Logger.Info($"EventCommand: '{word}' -> index={index}");
+        MainFile.Logger.Debug($"EventCommand: '{word}' -> index={index}");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -112,19 +108,19 @@ public sealed class EventCommand : IVoiceCommand
         if (layout == null) return [];
 
         var buttons = layout.OptionButtons
-            .Where(b => Godot.GodotObject.IsInstanceValid(b) && b.IsInsideTree() && b.IsEnabled)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsInsideTree() && b.IsEnabled)
             .ToList();
 
         if (buttons.Count == 0) return [];
 
-        MainFile.Logger.Info($"EventCommand.ComputeSupportedWords: {buttons.Count} enabled buttons");
+        MainFile.Logger.Debug($"EventCommand.ComputeSupportedWords: {buttons.Count} enabled buttons");
 
         for (var i = 0; i < buttons.Count && i < 9; i++)
         {
             var oneBased = i + 1;
             // 中文: 第一个选项, 第二个选项...
-            _wordToIndex[$"第{ChineseNumbers[oneBased]}个选项"] = i;
-            _wordToIndex[$"第{ChineseNumbers[oneBased]}个"] = i;
+            _wordToIndex[L10n.EventOptionOrdinal(oneBased)] = i;
+            _wordToIndex[L10n.EnemyOrdinal(oneBased)] = i;
             // 数字: 第1个选项, 第2个选项...
             _wordToIndex[$"第{oneBased}个选项"] = i;
             _wordToIndex[$"第{oneBased}个"] = i;

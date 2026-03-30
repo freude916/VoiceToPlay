@@ -19,10 +19,8 @@ internal sealed class VoiceAudioCaptureService : IDisposable
 
     private readonly Node _owner;
     private readonly int _targetSampleRate;
-    private int _busIndex = -1;
 
     private AudioStreamPlayer? _microphonePlayer;
-    private JitterBufferPlaybackService? _playbackService;
 
     public VoiceAudioCaptureService(Node owner, int targetSampleRate = 16000)
     {
@@ -39,7 +37,36 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     public AudioEffectSpectrumAnalyzer? SpectrumAnalyzer { get; private set; }
     public LinearPcm16Resampler Resampler { get; }
     public int FramesAvailable => CaptureEffect?.GetFramesAvailable() ?? 0;
-    public int BusIndex => _busIndex;
+    public int BusIndex { get; private set; } = -1;
+
+    /// <summary>
+    ///     Jitter Buffer 播放服务，用于回放采集的音频。
+    /// </summary>
+    public JitterBufferPlaybackService? PlaybackService { get; private set; }
+
+    /// <summary>
+    ///     当前输入设备名称
+    /// </summary>
+    public static string CurrentInputDevice => AudioServer.GetInputDevice();
+
+    public void Dispose()
+    {
+        _microphonePlayer?.Stop();
+        if (GodotObject.IsInstanceValid(_microphonePlayer))
+            _microphonePlayer.QueueFree();
+
+        PlaybackService?.Dispose();
+        PlaybackService = null;
+
+        // 清理 bus effect
+        if (BusIndex >= 0)
+        {
+            var effectCount = AudioServer.GetBusEffectCount(BusIndex);
+            for (var i = effectCount - 1; i >= 0; i--)
+                if (AudioServer.GetBusEffect(BusIndex, i) is AudioEffectCapture)
+                    AudioServer.RemoveBusEffect(BusIndex, i);
+        }
+    }
 
     /// <summary>
     ///     设置高通滤波器截止频率 (Hz)
@@ -66,35 +93,6 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     {
         if (AmplifyEffect != null)
             AmplifyEffect.VolumeDb = Math.Clamp(db, -20f, 20f);
-    }
-
-    /// <summary>
-    ///     Jitter Buffer 播放服务，用于回放采集的音频。
-    /// </summary>
-    public JitterBufferPlaybackService? PlaybackService => _playbackService;
-
-    /// <summary>
-    ///     当前输入设备名称
-    /// </summary>
-    public static string CurrentInputDevice => AudioServer.GetInputDevice();
-
-    public void Dispose()
-    {
-        _microphonePlayer?.Stop();
-        if (GodotObject.IsInstanceValid(_microphonePlayer))
-            _microphonePlayer.QueueFree();
-
-        _playbackService?.Dispose();
-        _playbackService = null;
-
-        // 清理 bus effect
-        if (_busIndex >= 0)
-        {
-            var effectCount = AudioServer.GetBusEffectCount(_busIndex);
-            for (var i = effectCount - 1; i >= 0; i--)
-                if (AudioServer.GetBusEffect(_busIndex, i) is AudioEffectCapture)
-                    AudioServer.RemoveBusEffect(_busIndex, i);
-        }
     }
 
     /// <summary>
@@ -127,14 +125,14 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         error = null;
 
         // 1. 创建 Capture Bus
-        _busIndex = EnsureCaptureBus();
+        BusIndex = EnsureCaptureBus();
 
         // 2. 安装音频效果：高通滤波器 -> 低通滤波器 -> 增益 -> 频谱分析 -> 捕获
-        HighPassFilter = GetOrCreateHighPassFilter(_busIndex);
-        LowPassFilter = GetOrCreateLowPassFilter(_busIndex);
-        AmplifyEffect = GetOrCreateAmplifyEffect(_busIndex);
-        SpectrumAnalyzer = GetOrCreateSpectrumAnalyzer(_busIndex);
-        CaptureEffect = GetOrCreateCaptureEffect(_busIndex);
+        HighPassFilter = GetOrCreateHighPassFilter(BusIndex);
+        LowPassFilter = GetOrCreateLowPassFilter(BusIndex);
+        AmplifyEffect = GetOrCreateAmplifyEffect(BusIndex);
+        SpectrumAnalyzer = GetOrCreateSpectrumAnalyzer(BusIndex);
+        CaptureEffect = GetOrCreateCaptureEffect(BusIndex);
         if (CaptureEffect != null) CaptureEffect.BufferLength = 1.0f;
 
         // 3. 创建 AudioStreamMicrophone
@@ -146,8 +144,8 @@ internal sealed class VoiceAudioCaptureService : IDisposable
         if (EnablePlayback)
         {
             EnsurePlaybackBus();
-            _playbackService = new JitterBufferPlaybackService(_owner);
-            _playbackService.Initialize(PlaybackBusName);
+            PlaybackService = new JitterBufferPlaybackService(_owner);
+            PlaybackService.Initialize(PlaybackBusName);
         }
 #pragma warning restore CS0162
 
@@ -173,7 +171,7 @@ internal sealed class VoiceAudioCaptureService : IDisposable
     {
         CaptureEffect?.ClearBuffer();
         Resampler.Clear();
-        _playbackService?.Clear();
+        PlaybackService?.Clear();
     }
 
     private static int EnsureCaptureBus()

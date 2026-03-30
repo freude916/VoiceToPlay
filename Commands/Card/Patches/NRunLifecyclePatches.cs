@@ -11,19 +11,17 @@ namespace VoiceToPlay.Commands.Card.Patches;
 [HarmonyPatch(typeof(NRun), MethodType.Constructor)]
 internal static class NRunConstructorPatch
 {
-    private const bool DebugHandChanges = false;
-
     private static void Postfix(NRun __instance)
     {
         __instance.Ready += () =>
         {
-            MainFile.Logger.Info("NRun.Ready, subscribing to CombatManager.TurnStarted");
+            MainFile.Logger.Debug("NRun.Ready, subscribing to CombatManager.TurnStarted");
             SubscribeToCombatEvents();
         };
 
         __instance.TreeExited += () =>
         {
-            MainFile.Logger.Info("NRun.TreeExited, unsubscribing from combat events");
+            MainFile.Logger.Debug("NRun.TreeExited, unsubscribing from combat events");
             UnsubscribeFromCombatEvents();
             UnsubscribeFromHandChanges();
             PlayCardCommand.RefreshVocabulary();
@@ -34,18 +32,13 @@ internal static class NRunConstructorPatch
     {
         if (state.CurrentSide != CombatSide.Player) return;
 
-        MainFile.Logger.Info("Player turn started, subscribing to hand changes");
+        MainFile.Logger.Debug("Player turn started, subscribing to hand changes");
         SubscribeToHandChanges();
         PlayCardCommand.RefreshVocabulary();
     }
 
     private static void OnHandContentsChanged()
     {
-        # pragma warning disable CS0162 // Temp Debug Bool
-        if (DebugHandChanges){
-            MainFile.Logger.Info("Hand contents changed, refreshing vocabulary");
-        }
-        # pragma warning restore CS0162
         PlayCardCommand.RefreshVocabulary();
     }
 
@@ -54,7 +47,7 @@ internal static class NRunConstructorPatch
         var combatManager = CombatManager.Instance;
 
         combatManager.TurnStarted += OnTurnStarted;
-        MainFile.Logger.Info("Subscribed to CombatManager.TurnStarted");
+        MainFile.Logger.Debug("Subscribed to CombatManager.TurnStarted");
     }
 
     private static void UnsubscribeFromCombatEvents()
@@ -62,7 +55,7 @@ internal static class NRunConstructorPatch
         var combatManager = CombatManager.Instance;
 
         combatManager.TurnStarted -= OnTurnStarted;
-        MainFile.Logger.Info("Unsubscribed from CombatManager.TurnStarted");
+        MainFile.Logger.Debug("Unsubscribed from CombatManager.TurnStarted");
     }
 
     private static void SubscribeToHandChanges()
@@ -89,7 +82,7 @@ internal static class NRunConstructorPatch
         }
 
         hand.ContentsChanged += OnHandContentsChanged;
-        MainFile.Logger.Info("Subscribed to hand.ContentsChanged");
+        MainFile.Logger.Debug("Subscribed to hand.ContentsChanged");
     }
 
     private static void UnsubscribeFromHandChanges()
@@ -102,6 +95,6 @@ internal static class NRunConstructorPatch
         if (hand == null) return;
 
         hand.ContentsChanged -= OnHandContentsChanged;
-        MainFile.Logger.Info("Unsubscribed from hand.ContentsChanged");
+        MainFile.Logger.Debug("Unsubscribed from hand.ContentsChanged");
     }
 }

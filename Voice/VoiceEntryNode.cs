@@ -2,12 +2,17 @@ using Godot;
 using VoiceToPlay.Commands.Card;
 using VoiceToPlay.Commands.CardGrid;
 using VoiceToPlay.Commands.CardRow;
+using VoiceToPlay.Commands.CharacterSelect;
 using VoiceToPlay.Commands.Combat;
+using VoiceToPlay.Commands.DeckView;
 using VoiceToPlay.Commands.Event;
+using VoiceToPlay.Commands.GlobalUi;
 using VoiceToPlay.Commands.MainMenu;
 using VoiceToPlay.Commands.Map;
+using VoiceToPlay.Commands.Potion;
 using VoiceToPlay.Commands.RestSite;
 using VoiceToPlay.Commands.Rewards;
+using VoiceToPlay.Commands.Shop;
 using VoiceToPlay.Commands.Treasure;
 using VoiceToPlay.Commands.Turn;
 using VoiceToPlay.Commands.Ui;
@@ -35,22 +40,44 @@ internal sealed partial class VoiceEntryNode : Node
         // 1. 创建命令引擎
         _commandEngine = new VoiceCommandEngine();
 
-        // 2. 注册命令
-        _commandEngine.Register(new MainMenuCommand());
-        _commandEngine.Register(new SelectEnemyCommand());
-        _commandEngine.Register(new PlayCardCommand());
-        _commandEngine.Register(new HandCardSelectionCommand());
-        _commandEngine.Register(new EndTurnCommand());
+        // 2. 注册命令（按功能分区）
+        
+        // 全局 - UI 按钮
         _commandEngine.Register(new ProceedCommand());
         _commandEngine.Register(new ConfirmCommand());
         _commandEngine.Register(new BackCommand());
+
+        // 主菜单 / 角色选择
+        _commandEngine.Register(new MainMenuCommand());
+        _commandEngine.Register(new CharacterSelectCommand());
+        
+        // 战斗 - 全功能 UI
+        _commandEngine.Register(new GlobalUiCommand());
+
+        // 战斗 - 药水
+        _commandEngine.Register(new PotionCommand());
+        
+        // 战斗 - 卡牌操作
+        _commandEngine.Register(new PlayCardCommand());
+        _commandEngine.Register(new HandCardSelectionCommand());
+        _commandEngine.Register(new SelectEnemyCommand());
+        _commandEngine.Register(new EndTurnCommand());
+
+        // 奖励 / 选牌
         _commandEngine.Register(new RewardsCommand());
-        _commandEngine.Register(new MapCommand());
         _commandEngine.Register(new CardRowSelectCommand());
         _commandEngine.Register(new CardGridSelectCommand());
+
+        // 地图 / 事件 / 宝箱 / 休息 / 商店
+        _commandEngine.Register(new MapCommand());
         _commandEngine.Register(new EventCommand());
         _commandEngine.Register(new TreasureCommand());
         _commandEngine.Register(new RestSiteCommand());
+        _commandEngine.Register(new ShopCommand());
+
+        // 牌组视图 / 卡牌详情
+        _commandEngine.Register(new DeckViewCommand());
+        _commandEngine.Register(new InspectCardCommand());
 
         // 3. 创建识别服务
         _recognitionService = new VoiceRecognitionService(this, _commandEngine);
@@ -93,7 +120,7 @@ internal sealed partial class VoiceEntryNode : Node
         _listening = !_listening;
         _recognitionService?.SetListeningEnabled(_listening);
         RefreshDebugPanel();
-        MainFile.Logger.Info($"Voice listening {(_listening ? "enabled" : "disabled")} (F8)");
+        MainFile.Logger.Debug($"Voice listening {(_listening ? "enabled" : "disabled")} (F8)");
         GetViewport().SetInputAsHandled();
     }
 

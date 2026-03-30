@@ -1,3 +1,4 @@
+using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 
@@ -13,14 +14,36 @@ internal static class NMainMenuConstructorPatch
     {
         __instance.Ready += () =>
         {
-            MainFile.Logger.Info("NMainMenu.Ready (via Signal), refreshing vocabulary");
+            MainFile.Logger.Debug("NMainMenu.Ready (via Signal), refreshing vocabulary");
             MainMenuCommand.RefreshVocabulary();
+
+            // 监听子菜单栈变化，在子菜单打开/关闭时刷新词表
+            var submenuStack = __instance.SubmenuStack;
+            if (submenuStack != null)
+                submenuStack.Connect(NSubmenuStack.SignalName.StackModified, Callable.From(() =>
+                {
+                    MainFile.Logger.Debug("NMainMenuSubmenuStack.StackModified, refreshing vocabulary");
+                    MainMenuCommand.RefreshVocabulary();
+                }));
         };
 
         __instance.TreeExited += () =>
         {
-            MainFile.Logger.Info("NMainMenu.TreeExited (via Signal), clearing vocabulary");
+            MainFile.Logger.Debug("NMainMenu.TreeExited (via Signal), clearing vocabulary");
             MainMenuCommand.RefreshVocabulary();
         };
+    }
+}
+
+/// <summary>
+///     NMainMenu.RefreshButtons 补丁：在按钮状态变化时刷新词表
+/// </summary>
+[HarmonyPatch(typeof(NMainMenu), nameof(NMainMenu.RefreshButtons))]
+internal static class NMainMenuRefreshButtonsPatch
+{
+    private static void Postfix()
+    {
+        MainFile.Logger.Debug("NMainMenu.RefreshButtons, refreshing vocabulary");
+        MainMenuCommand.RefreshVocabulary();
     }
 }

@@ -2,6 +2,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Runs;
+using VoiceToPlay.Util;
 using VoiceToPlay.Voice.Core;
 
 namespace VoiceToPlay.Commands.Map;
@@ -11,12 +12,6 @@ namespace VoiceToPlay.Commands.Map;
 /// </summary>
 public sealed class MapCommand : IVoiceCommand
 {
-    private static readonly Dictionary<int, string> ChineseNumbers = new()
-    {
-        [1] = "一", [2] = "二", [3] = "三", [4] = "四", [5] = "五",
-        [6] = "六", [7] = "七", [8] = "八", [9] = "九"
-    };
-
     private readonly Dictionary<string, int> _wordToIndex = new();
 
     /// <summary>
@@ -36,26 +31,26 @@ public sealed class MapCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToIndex.TryGetValue(word, out var index))
         {
             MainFile.Logger.Warn($"MapCommand: word '{word}' not found");
-            return;
+            return CommandResult.Failed;
         }
 
         var mapScreen = NMapScreen.Instance;
         if (mapScreen == null)
         {
             MainFile.Logger.Warn("MapCommand: NMapScreen.Instance is null");
-            return;
+            return CommandResult.Failed;
         }
 
         var coords = GetTravelableCoords();
         if (index < 0 || index >= coords.Count)
         {
             MainFile.Logger.Warn($"MapCommand: invalid index {index}, count={coords.Count}");
-            return;
+            return CommandResult.Failed;
         }
 
         var targetCoord = coords[index];
@@ -63,11 +58,12 @@ public sealed class MapCommand : IVoiceCommand
         if (mapPoint == null)
         {
             MainFile.Logger.Warn($"MapCommand: map point not found for coord {targetCoord}");
-            return;
+            return CommandResult.Failed;
         }
 
         mapScreen.OnMapPointSelectedLocally(mapPoint);
-        MainFile.Logger.Info($"MapCommand: '{word}' -> index={index}, coord={targetCoord}");
+        MainFile.Logger.Debug($"MapCommand: '{word}' -> index={index}, coord={targetCoord}");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -98,35 +94,35 @@ public sealed class MapCommand : IVoiceCommand
         var mapScreen = NMapScreen.Instance;
         if (mapScreen == null)
         {
-            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: mapScreen is null");
+            MainFile.Logger.Debug("MapCommand.ComputeSupportedWords: mapScreen is null");
             return [];
         }
 
         if (!mapScreen.IsOpen)
         {
-            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: mapScreen.IsOpen is false");
+            MainFile.Logger.Debug("MapCommand.ComputeSupportedWords: mapScreen.IsOpen is false");
             return [];
         }
 
         if (mapScreen.IsTraveling)
         {
-            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: IsTraveling is true");
+            MainFile.Logger.Debug("MapCommand.ComputeSupportedWords: IsTraveling is true");
             return [];
         }
 
         var coords = GetTravelableCoords();
         if (coords.Count == 0)
         {
-            MainFile.Logger.Info("MapCommand.ComputeSupportedWords: no travelable coords");
+            MainFile.Logger.Debug("MapCommand.ComputeSupportedWords: no travelable coords");
             return [];
         }
 
-        MainFile.Logger.Info($"MapCommand.ComputeSupportedWords: {coords.Count} travelable coords");
+        MainFile.Logger.Debug($"MapCommand.ComputeSupportedWords: {coords.Count} travelable coords");
 
         // 方位词
         _wordToIndex["左边"] = 0;
         _wordToIndex["右边"] = coords.Count - 1;
-        _wordToIndex["上去"] = 0;  // 默认选第一个
+        _wordToIndex["上去"] = 0; // 默认选第一个
 
         // 中间（仅当恰好3条路）
         if (coords.Count == 3)
@@ -137,8 +133,8 @@ public sealed class MapCommand : IVoiceCommand
         {
             var oneBased = i + 1;
             // 中文: 第一条, 第二条...
-            _wordToIndex[$"第{ChineseNumbers[oneBased]}条"] = i;
-            _wordToIndex[$"第{ChineseNumbers[oneBased]}"] = i;
+            _wordToIndex[L10n.MapPathOrdinal(oneBased)] = i;
+            _wordToIndex[L10n.Ordinal(oneBased, "")] = i;
         }
 
         return new HashSet<string>(_wordToIndex.Keys, StringComparer.Ordinal);

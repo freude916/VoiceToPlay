@@ -11,9 +11,10 @@ internal static class NCombatRoomConstructorPatch
 {
     private static void Postfix(NCombatRoom __instance)
     {
+        SelectEnemyCommand.RefreshVocabulary();
         __instance.TreeExited += () =>
         {
-            MainFile.Logger.Info("NCombatRoom.TreeExited, clearing target state");
+            MainFile.Logger.Debug("NCombatRoom.TreeExited, clearing target state");
             CombatTargetState.Clear();
         };
     }

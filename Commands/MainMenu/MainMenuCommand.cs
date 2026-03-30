@@ -34,12 +34,12 @@ public sealed class MainMenuCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         if (!_wordToButton.TryGetValue(word, out var button))
         {
             MainFile.Logger.Warn($"MainMenuCommand: word '{word}' not found in cache");
-            return;
+            return CommandResult.Failed;
         }
 
         // 检查按钮是否还有效（主菜单可能已销毁）
@@ -47,11 +47,12 @@ public sealed class MainMenuCommand : IVoiceCommand
         {
             MainFile.Logger.Warn($"MainMenuCommand: button for '{word}' is disposed, clearing cache");
             _wordToButton.Clear();
-            return;
+            return CommandResult.Failed;
         }
 
-        MainFile.Logger.Info($"MainMenuCommand: clicking '{word}'");
+        MainFile.Logger.Debug($"MainMenuCommand: clicking '{word}'");
         button.ForceClick();
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -68,7 +69,7 @@ public sealed class MainMenuCommand : IVoiceCommand
         if (!newWords.SetEquals(instance._cachedWords))
         {
             instance._cachedWords = newWords;
-            MainFile.Logger.Info("MainMenuCommand: vocabulary changed, notifying...");
+            MainFile.Logger.Debug("MainMenuCommand: vocabulary changed, notifying...");
             instance.VocabularyChanged?.Invoke(instance);
         }
     }
@@ -80,9 +81,11 @@ public sealed class MainMenuCommand : IVoiceCommand
     {
         _wordToButton.Clear();
         var mainMenu = NGame.Instance?.MainMenu;
-        if (mainMenu == null) return [];  // 不在主菜单，静默返回空
+        if (mainMenu == null) return []; // 不在主菜单，静默返回空
 
         var buttonInfos = new List<string>();
+
+        // 1. 主菜单按钮
         foreach (var button in mainMenu.MainMenuButtons)
         {
             if (button == null || !button.IsEnabled || !button.IsVisibleInTree())
@@ -99,8 +102,29 @@ public sealed class MainMenuCommand : IVoiceCommand
             }
         }
 
+        // 2. 子菜单按钮（如单人模式下的"标准模式"、"每日挑战"等）
+        var submenu = mainMenu.SubmenuStack?.Peek();
+        if (submenu != null)
+            foreach (var child in submenu.GetChildren())
+            {
+                if (child is not NSubmenuButton submenuButton) continue;
+                if (!GodotObject.IsInstanceValid(submenuButton) || !submenuButton.IsEnabled ||
+                    !submenuButton.IsVisibleInTree())
+                    continue;
+
+                var text = GetSubmenuButtonText(submenuButton);
+                if (string.IsNullOrEmpty(text)) continue;
+
+                var normalized = VoiceText.Normalize(text);
+                if (!string.IsNullOrEmpty(normalized))
+                {
+                    _wordToButton[normalized] = submenuButton;
+                    buttonInfos.Add($"'{normalized}'->submenu:{submenuButton.Name}");
+                }
+            }
+
         if (buttonInfos.Count > 0)
-            MainFile.Logger.Info($"MainMenuCommand: buttons=[{string.Join(", ", buttonInfos)}]");
+            MainFile.Logger.Debug($"MainMenuCommand: buttons=[{string.Join(", ", buttonInfos)}]");
 
         return new HashSet<string>(_wordToButton.Keys, StringComparer.Ordinal);
     }
@@ -113,5 +137,12 @@ public sealed class MainMenuCommand : IVoiceCommand
         // 尝试从子节点找 Label
         var label = button.GetNodeOrNull<Label>("./");
         return label?.Text;
+    }
+
+    private static string? GetSubmenuButtonText(NSubmenuButton button)
+    {
+        // NSubmenuButton 有 _title 字段（MegaLabel）
+        var titleLabel = button.GetNodeOrNull<Label>("%Title");
+        return titleLabel?.Text;
     }
 }

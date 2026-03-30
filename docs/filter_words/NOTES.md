@@ -3,6 +3,7 @@
 ## OpenFST - 从 Vosk 模型提取词汇
 
 ### 环境
+
 - Kaldi OpenFST 位于 `/opt/kaldi/tools/openfst-1.8.4/`
 - 需要设置 `LD_LIBRARY_PATH` 包含 lib 和 lib/fst 目录
 
@@ -81,6 +82,7 @@ tokenizer.lcut("待分词文本")
 ### 词典文件格式
 
 #### dict.txt - 主词典
+
 ```
 词语 词频 词性
 的 3188252 uj
@@ -89,6 +91,7 @@ tokenizer.lcut("待分词文本")
 ```
 
 #### idf.txt - IDF 权重（用于关键词提取）
+
 ```
 词语 IDF值
 劳动防护 13.900677652
@@ -96,6 +99,7 @@ tokenizer.lcut("待分词文本")
 ```
 
 #### stopwords.txt - 停用词
+
 ```
 词语（每行一个）
 的
@@ -104,6 +108,7 @@ tokenizer.lcut("待分词文本")
 ```
 
 #### cn_synonym.txt - 同义词
+
 ```
 编号= 词1 词2 词3 ...
 Aa01A01= 人 士 人物 人士

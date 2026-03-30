@@ -16,7 +16,7 @@ internal static class NPlayerHandLifecyclePatches
 
     private static void OnModeChanged()
     {
-        MainFile.Logger.Info("NPlayerHand.ModeChanged, refreshing vocabulary");
+        MainFile.Logger.Debug("NPlayerHand.ModeChanged, refreshing vocabulary");
         HandCardSelectionCommand.RefreshVocabulary();
         PlayCardCommand.RefreshVocabulary();
     }

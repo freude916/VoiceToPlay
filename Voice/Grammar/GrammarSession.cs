@@ -1,7 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-
 namespace VoiceToPlay.Voice.Grammar;
 
 /// <summary>
@@ -47,25 +46,19 @@ internal sealed class GrammarSession
         // 检查是否有变化
         if (_activeWords.SetEquals(expandedWords))
             return string.Empty; // 无变化
-        
-        #pragma warning disable CS0162 // Debug
+
+#pragma warning disable CS0162 // Debug
         // ReSharper disable HeuristicUnreachableCode
         // 计算 diff
         if (LogGrammarDiff)
         {
             var added = expandedWords.Except(_activeWords).ToList();
             var removed = _activeWords.Except(expandedWords).ToList();
-            
-            if (added.Count > 0)
-            {
 
-                MainFile.Logger.Info($"GrammarSession: added words: [{string.Join(", ", added)}]");
-            }
-            
+            if (added.Count > 0) MainFile.Logger.Info($"GrammarSession: added words: [{string.Join(", ", added)}]");
+
             if (removed.Count > 0)
-            {
                 MainFile.Logger.Info($"GrammarSession: removed words: [{string.Join(", ", removed)}]");
-            }
         }
 
         _activeWords = expandedWords;
@@ -76,9 +69,9 @@ internal sealed class GrammarSession
 
         if (LogFullGrammar)
             MainFile.Logger.Info($"GrammarSession: generated grammar with {sorted.Count} words: {json}");
-        
+
         // ReSharper restore HeuristicUnreachableCode
-        #pragma warning restore CS0162
+#pragma warning restore CS0162
         return json;
     }
 }

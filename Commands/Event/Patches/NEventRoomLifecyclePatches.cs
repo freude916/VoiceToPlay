@@ -12,7 +12,7 @@ internal static class NEventRoomSetOptionsPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NEventRoom.SetOptions, refreshing vocabulary");
+        MainFile.Logger.Debug("NEventRoom.SetOptions, refreshing vocabulary");
         EventCommand.RefreshVocabulary();
     }
 }
@@ -25,7 +25,7 @@ internal static class NEventLayoutDisableOptionsPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NEventLayout.DisableEventOptions, clearing vocabulary");
+        MainFile.Logger.Debug("NEventLayout.DisableEventOptions, clearing vocabulary");
         EventCommand.RefreshVocabulary();
     }
 }

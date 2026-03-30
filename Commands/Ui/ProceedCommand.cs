@@ -24,17 +24,18 @@ public sealed class ProceedCommand : IVoiceCommand
 
     public IEnumerable<string> SupportedWords => HasActiveButton() ? _words : [];
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         var button = _activeButton;
         if (button == null || !IsButtonValid(button))
         {
             MainFile.Logger.Warn("ProceedCommand: no active proceed button");
-            return;
+            return CommandResult.Failed;
         }
 
         button.ForceClick();
         MainFile.Logger.Info("ProceedCommand: '前进' clicked");
+        return CommandResult.Success;
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -45,7 +46,7 @@ public sealed class ProceedCommand : IVoiceCommand
     public static void RegisterButton(NProceedButton button)
     {
         _activeButton = button;
-        MainFile.Logger.Info("ProceedCommand: registered button");
+        MainFile.Logger.Debug("ProceedCommand: registered button");
         RefreshVocabulary();
     }
 
@@ -55,7 +56,7 @@ public sealed class ProceedCommand : IVoiceCommand
     public static void UnregisterButton()
     {
         _activeButton = null;
-        MainFile.Logger.Info("ProceedCommand: unregistered button");
+        MainFile.Logger.Debug("ProceedCommand: unregistered button");
         RefreshVocabulary();
     }
 

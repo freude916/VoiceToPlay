@@ -11,7 +11,7 @@ internal static class NRewardsScreenSetRewardsPatch
 {
     private static void Postfix(NRewardsScreen __instance)
     {
-        MainFile.Logger.Info("NRewardsScreen.SetRewards, refreshing vocabulary");
+        MainFile.Logger.Debug("NRewardsScreen.SetRewards, refreshing vocabulary");
         RewardsCommand.RefreshVocabulary();
     }
 }
@@ -21,8 +21,8 @@ internal static class NRewardsScreenShownPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NRewardsScreen.AfterOverlayShown, refreshing vocabulary (forced)");
-        RewardsCommand.RefreshVocabulary(force: true);
+        MainFile.Logger.Debug("NRewardsScreen.AfterOverlayShown, refreshing vocabulary (forced)");
+        RewardsCommand.RefreshVocabulary(true);
     }
 }
 
@@ -31,7 +31,7 @@ internal static class NRewardsScreenClosedPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NRewardsScreen.AfterOverlayClosed, clearing vocabulary");
+        MainFile.Logger.Debug("NRewardsScreen.AfterOverlayClosed, clearing vocabulary");
         RewardsCommand.RefreshVocabulary();
     }
 }

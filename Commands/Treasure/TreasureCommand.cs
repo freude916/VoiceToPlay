@@ -25,6 +25,8 @@ public sealed class TreasureCommand : IVoiceCommand
         VoiceText.Normalize(OpenChest)
     };
 
+    private readonly Dictionary<string, string> _normalizedToRaw = new();
+
     private readonly HashSet<string> _relicWords = new(StringComparer.Ordinal)
     {
         VoiceText.Normalize(PreviewRelic),
@@ -32,8 +34,6 @@ public sealed class TreasureCommand : IVoiceCommand
         VoiceText.Normalize(ClaimRelic),
         "拿取"
     };
-
-    private readonly Dictionary<string, string> _normalizedToRaw = new();
 
     /// <summary>
     ///     缓存的词表，SupportedWords getter 直接返回此缓存
@@ -52,20 +52,16 @@ public sealed class TreasureCommand : IVoiceCommand
     /// </summary>
     public IEnumerable<string> SupportedWords => _cachedWords;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         var normalizedOpenChest = VoiceText.Normalize(OpenChest);
-        if (word == normalizedOpenChest)
-        {
-            TryOpenChest();
-            return;
-        }
+        if (word == normalizedOpenChest) return TryOpenChest();
 
         var holders = GetEnabledHolders();
         if (holders.Count == 0)
         {
             MainFile.Logger.Warn("TreasureCommand: no enabled holders");
-            return;
+            return CommandResult.Failed;
         }
 
         var normalizedPreview = VoiceText.Normalize(PreviewRelic);
@@ -75,20 +71,19 @@ public sealed class TreasureCommand : IVoiceCommand
         if (word == normalizedPreview)
         {
             PreviewCurrent(holders);
+            return CommandResult.Success;
         }
-        else if (word == normalizedNext)
+
+        if (word == normalizedNext)
         {
             PreviewNext(holders);
+            return CommandResult.Success;
         }
-        else if (word == normalizedClaim || word == "拿取")
-        {
-            ClaimCurrent(holders);
-        }
-        else
-        {
-            // 可能是遗物名称
-            TryClaimByName(holders, word);
-        }
+
+        if (word == normalizedClaim || word == "拿取") return ClaimCurrent(holders);
+
+        // 可能是遗物名称
+        return TryClaimByName(holders, word);
     }
 
     public event Action<IVoiceCommand>? VocabularyChanged;
@@ -124,8 +119,9 @@ public sealed class TreasureCommand : IVoiceCommand
         }
         catch
         {
-            return [];  // 场景切换中，安全返回空
+            return []; // 场景切换中，安全返回空
         }
+
         if (currentScreen is not NTreasureRoom treasureRoom) return [];
 
         var holders = GetEnabledHolders();
@@ -138,12 +134,13 @@ public sealed class TreasureCommand : IVoiceCommand
             {
                 foreach (var word in _chestClosedWords)
                     _normalizedToRaw[word] = word;
-                MainFile.Logger.Info("TreasureCommand: chest not opened, showing '打开宝箱'");
+                MainFile.Logger.Debug("TreasureCommand: chest not opened, showing '打开宝箱'");
             }
+
             return new HashSet<string>(_normalizedToRaw.Keys, StringComparer.Ordinal);
         }
 
-        MainFile.Logger.Info($"TreasureCommand.ComputeSupportedWords: {holders.Count} enabled holders");
+        MainFile.Logger.Debug($"TreasureCommand.ComputeSupportedWords: {holders.Count} enabled holders");
 
         // 遗物选择模式
         foreach (var word in _relicWords)
@@ -177,33 +174,35 @@ public sealed class TreasureCommand : IVoiceCommand
                 if (child is Node childNode)
                     stack.Push(childNode);
         }
+
         return null;
     }
 
-    private static void TryOpenChest()
+    private static CommandResult TryOpenChest()
     {
         var currentScreen = ActiveScreenContext.Instance?.GetCurrentScreen();
         if (currentScreen is not NTreasureRoom treasureRoom)
         {
             MainFile.Logger.Warn("TreasureCommand: not in treasure room");
-            return;
+            return CommandResult.Failed;
         }
 
         var chestButton = FindChestButton(treasureRoom);
         if (chestButton == null)
         {
             MainFile.Logger.Warn("TreasureCommand: chest button not found");
-            return;
+            return CommandResult.Failed;
         }
 
         if (!chestButton.IsEnabled)
         {
             MainFile.Logger.Warn("TreasureCommand: chest button not enabled");
-            return;
+            return CommandResult.Failed;
         }
 
         chestButton.ForceClick();
-        MainFile.Logger.Info("TreasureCommand: opened chest");
+        MainFile.Logger.Debug("TreasureCommand: opened chest");
+        return CommandResult.Success;
     }
 
     private static List<NTreasureRoomRelicHolder> GetEnabledHolders()
@@ -224,9 +223,7 @@ public sealed class TreasureCommand : IVoiceCommand
                 holder.IsInsideTree() &&
                 holder.Visible &&
                 holder.IsEnabled)
-            {
                 result.Add(holder);
-            }
 
             foreach (var child in node.GetChildren())
                 if (child is Node childNode)
@@ -265,7 +262,7 @@ public sealed class TreasureCommand : IVoiceCommand
         }
 
         TryFocus(holder);
-        MainFile.Logger.Info($"TreasureCommand: preview current index={index + 1}");
+        MainFile.Logger.Debug($"TreasureCommand: preview current index={index + 1}");
     }
 
     private static void PreviewNext(List<NTreasureRoomRelicHolder> holders)
@@ -284,10 +281,10 @@ public sealed class TreasureCommand : IVoiceCommand
         }
 
         TryFocus(holder);
-        MainFile.Logger.Info($"TreasureCommand: preview next from={currentIndex + 1} to={nextIndex + 1}");
+        MainFile.Logger.Debug($"TreasureCommand: preview next from={currentIndex + 1} to={nextIndex + 1}");
     }
 
-    private static void ClaimCurrent(List<NTreasureRoomRelicHolder> holders)
+    private static CommandResult ClaimCurrent(List<NTreasureRoomRelicHolder> holders)
     {
         var index = ResolveCurrentIndex(holders);
         var holder = holders[index];
@@ -295,17 +292,18 @@ public sealed class TreasureCommand : IVoiceCommand
         if (!GodotObject.IsInstanceValid(holder) || !holder.IsInsideTree())
         {
             MainFile.Logger.Warn($"TreasureCommand: holder invalid at index={index + 1}");
-            return;
+            return CommandResult.Failed;
         }
 
         // 选择遗物后立即清理 HoverTip
         NHoverTipSet.Remove(holder);
 
         holder.ForceClick();
-        MainFile.Logger.Info($"TreasureCommand: claim current index={index + 1}");
+        MainFile.Logger.Debug($"TreasureCommand: claim current index={index + 1}");
+        return CommandResult.Success;
     }
 
-    private static void TryClaimByName(List<NTreasureRoomRelicHolder> holders, string normalizedRelicName)
+    private static CommandResult TryClaimByName(List<NTreasureRoomRelicHolder> holders, string normalizedRelicName)
     {
         foreach (var holder in holders)
         {
@@ -316,12 +314,13 @@ public sealed class TreasureCommand : IVoiceCommand
             if (relicName == normalizedRelicName)
             {
                 holder.ForceClick();
-                MainFile.Logger.Info($"TreasureCommand: claim by name '{normalizedRelicName}'");
-                return;
+                MainFile.Logger.Debug($"TreasureCommand: claim by name '{normalizedRelicName}'");
+                return CommandResult.Success;
             }
         }
 
         MainFile.Logger.Warn($"TreasureCommand: relic name not found '{normalizedRelicName}'");
+        return CommandResult.Failed;
     }
 
     private static void TryFocus(NTreasureRoomRelicHolder holder)

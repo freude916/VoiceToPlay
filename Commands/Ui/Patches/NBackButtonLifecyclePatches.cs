@@ -18,8 +18,8 @@ internal static class NBackButtonEnablePatch
 [HarmonyPatch(typeof(NBackButton), "OnDisable")]
 internal static class NBackButtonDisablePatch
 {
-    private static void Postfix()
+    private static void Postfix(NBackButton __instance)
     {
-        BackCommand.UnregisterButton();
+        BackCommand.UnregisterButton(__instance);
     }
 }

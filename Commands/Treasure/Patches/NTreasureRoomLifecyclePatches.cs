@@ -1,6 +1,4 @@
-using Godot;
 using HarmonyLib;
-using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 
@@ -14,7 +12,7 @@ internal static class NTreasureRoomEnterPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NTreasureRoom._EnterTree, refreshing vocabulary");
+        MainFile.Logger.Debug("NTreasureRoom._EnterTree, refreshing vocabulary");
         TreasureCommand.RefreshVocabulary();
     }
 }
@@ -24,7 +22,7 @@ internal static class NTreasureRoomRelicCollectionInitPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NTreasureRoomRelicCollection.InitializeRelics, refreshing vocabulary");
+        MainFile.Logger.Debug("NTreasureRoomRelicCollection.InitializeRelics, refreshing vocabulary");
         TreasureCommand.RefreshVocabulary();
     }
 }
@@ -38,7 +36,7 @@ internal static class NTreasureRoomExitPatch
 {
     private static void Postfix()
     {
-        MainFile.Logger.Info("NTreasureRoom._ExitTree, clearing vocabulary");
+        MainFile.Logger.Debug("NTreasureRoom._ExitTree, clearing vocabulary");
         TreasureCommand.RefreshVocabulary();
     }
 }

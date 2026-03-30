@@ -1,4 +1,3 @@
-using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using VoiceToPlay.Voice.Core;
 
@@ -13,17 +12,18 @@ public sealed class EndTurnCommand : IVoiceCommand
 
     public IEnumerable<string> SupportedWords => Words;
 
-    public void Execute(string word)
+    public CommandResult Execute(string word)
     {
         var endTurnButton = NCombatRoom.Instance?.Ui?.EndTurnButton;
         if (endTurnButton == null)
         {
             MainFile.Logger.Warn($"EndTurnCommand: {word} - EndTurnButton not found");
-            return;
+            return CommandResult.Failed;
         }
 
         endTurnButton.ForceClick();
-        MainFile.Logger.Info($"EndTurnCommand: {word}");
+        MainFile.Logger.Debug($"EndTurnCommand: {word}");
+        return CommandResult.Success;
     }
 
     // 静态词表，无需事件

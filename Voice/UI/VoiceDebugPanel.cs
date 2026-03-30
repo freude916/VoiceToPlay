@@ -10,32 +10,32 @@ public sealed partial class VoiceDebugPanel : PanelContainer
     private const float PanelWidth = 300f;
     private const float MarginRight = 50f;
     private const float MarginTop = 50f;
-
-    // 折叠状态
-    private bool _expanded = false;
     private VBoxContainer? _collapsibleContent;
-
-    // 控件引用
-    private Label? _statusLabel;
-    private Button? _expandButton;
-    private Label? _resultLabel;
-    private ProgressBar? _volumeBar;
-    private Label? _volumeValueLabel;
-    private Label? _deviceLabel;
-    private HSlider? _gainSlider;
-    private Label? _gainValueLabel;
-    private HSlider? _highPassSlider;
-    private Label? _highPassValueLabel;
-    private HSlider? _lowPassSlider;
-    private Label? _lowPassValueLabel;
-    private SpectrumDisplayControl? _spectrumDisplay;
 
     // 状态数据
     private string _currentResult = "-";
+    private Label? _deviceLabel;
+    private Button? _expandButton;
+
+    // 折叠状态
+    private bool _expanded;
+    private HSlider? _gainSlider;
+    private Label? _gainValueLabel;
     private bool _hasError;
+    private HSlider? _highPassSlider;
+    private Label? _highPassValueLabel;
     private string _inputDevice = "-";
     private bool _isListening = true;
+    private HSlider? _lowPassSlider;
+    private Label? _lowPassValueLabel;
     private float _peakAmplitude;
+    private Label? _resultLabel;
+    private SpectrumDisplayControl? _spectrumDisplay;
+
+    // 控件引用
+    private Label? _statusLabel;
+    private ProgressBar? _volumeBar;
+    private Label? _volumeValueLabel;
 
     /// <summary>
     ///     音频效果参数变化事件: (高通Hz, 低通Hz, 增益dB)
@@ -81,7 +81,7 @@ public sealed partial class VoiceDebugPanel : PanelContainer
 
         // === 标题行：语音状态 + 详情按钮 ===
         var headerRow = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
-        
+
         _statusLabel = new Label
         {
             MouseFilter = MouseFilterEnum.Ignore,
@@ -161,7 +161,7 @@ public sealed partial class VoiceDebugPanel : PanelContainer
         _collapsibleContent = new VBoxContainer
         {
             MouseFilter = MouseFilterEnum.Ignore,
-            Visible = false  // 默认折叠
+            Visible = false // 默认折叠
         };
         mainVbox.AddChild(_collapsibleContent);
 
@@ -403,8 +403,8 @@ public sealed partial class VoiceDebugPanel : PanelContainer
 /// </summary>
 internal sealed partial class SpectrumDisplayControl : Control
 {
-    private float[]? _data;
     private const int BarCount = 32;
+    private float[]? _data;
 
     public override void _Ready()
     {

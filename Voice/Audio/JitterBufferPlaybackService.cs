@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Godot;
 
 namespace VoiceToPlay.Voice.Audio;
@@ -29,28 +28,26 @@ internal sealed class JitterBufferPlaybackService : IDisposable
 
     private AudioStreamPlayer? _generatorPlayer;
     private AudioStreamGeneratorPlayback? _playback;
-    private int _totalBufferedFrames;
-    private bool _buffering = true;
-
-    /// <summary>
-    ///     是否处于缓冲状态
-    /// </summary>
-    public bool IsBuffering => _buffering;
-
-    /// <summary>
-    ///     当前缓冲帧数
-    /// </summary>
-    public int BufferedFrames => _totalBufferedFrames;
-
-    /// <summary>
-    ///     Buffer underrun 次数
-    /// </summary>
-    public int SkipCount { get; private set; }
 
     public JitterBufferPlaybackService(Node owner)
     {
         _owner = owner;
     }
+
+    /// <summary>
+    ///     是否处于缓冲状态
+    /// </summary>
+    public bool IsBuffering { get; private set; } = true;
+
+    /// <summary>
+    ///     当前缓冲帧数
+    /// </summary>
+    public int BufferedFrames { get; private set; }
+
+    /// <summary>
+    ///     Buffer underrun 次数
+    /// </summary>
+    public int SkipCount { get; private set; }
 
     public void Dispose()
     {
@@ -95,8 +92,8 @@ internal sealed class JitterBufferPlaybackService : IDisposable
     public void Clear()
     {
         _jitterBuffer.Clear();
-        _totalBufferedFrames = 0;
-        _buffering = true;
+        BufferedFrames = 0;
+        IsBuffering = true;
         _playback?.ClearBuffer();
     }
 
@@ -109,18 +106,18 @@ internal sealed class JitterBufferPlaybackService : IDisposable
         if (frames.Length == 0) return;
 
         // 限制最大缓冲
-        while (_totalBufferedFrames + frames.Length > MaxBufferFrames && _jitterBuffer.Count > 0)
+        while (BufferedFrames + frames.Length > MaxBufferFrames && _jitterBuffer.Count > 0)
         {
             var old = _jitterBuffer.Dequeue();
-            _totalBufferedFrames -= old.Length;
+            BufferedFrames -= old.Length;
         }
 
         _jitterBuffer.Enqueue(frames);
-        _totalBufferedFrames += frames.Length;
+        BufferedFrames += frames.Length;
 
         // 缓冲足够后退出缓冲状态
-        if (_buffering && _totalBufferedFrames >= MinBufferFrames)
-            _buffering = false;
+        if (IsBuffering && BufferedFrames >= MinBufferFrames)
+            IsBuffering = false;
     }
 
     /// <summary>
@@ -128,7 +125,7 @@ internal sealed class JitterBufferPlaybackService : IDisposable
     /// </summary>
     public void Tick()
     {
-        if (_playback == null || _buffering) return;
+        if (_playback == null || IsBuffering) return;
 
         var framesAvailable = _playback.GetFramesAvailable();
         if (framesAvailable <= 0) return;
@@ -159,19 +156,19 @@ internal sealed class JitterBufferPlaybackService : IDisposable
                 _playback.PushBuffer(partial);
                 _jitterBuffer.Dequeue();
                 _jitterBuffer.Enqueue(remaining);
-                _totalBufferedFrames -= framesAvailable;
+                BufferedFrames -= framesAvailable;
                 break;
             }
 
             _playback.PushBuffer(frames);
             framesAvailable -= frames.Length;
-            _totalBufferedFrames -= frames.Length;
+            BufferedFrames -= frames.Length;
             _jitterBuffer.Dequeue();
         }
 
         // 缓冲不足，重新进入缓冲状态
-        if (_totalBufferedFrames >= MinBufferFrames / 2 || _buffering) return;
-        _buffering = true;
+        if (BufferedFrames >= MinBufferFrames / 2 || IsBuffering) return;
+        IsBuffering = true;
         // MainFile.Logger.Info("JitterBufferPlayback: re-buffering...");
         // Too easy to enter rebuffering :angry: , be silent then
     }
